@@ -321,11 +321,7 @@
     border-color: var(--accent);
     transform: translateX(4px);
   }
-  .task-card.completed {
-    opacity: 0.4;
-    border-color: var(--green);
-  }
-  .task-card.completed .task-name { text-decoration: line-through; }
+  /* legacy .completed class removed - using .task-done / .task-failed / .task-carryover */
   .task-card::before {
     content: '';
     position: absolute;
@@ -513,10 +509,216 @@
     text-transform: uppercase;
   }
 
+  /* TASK STATES */
+  .task-card.task-done {
+    border-left: 4px solid var(--green);
+    opacity: 0.6;
+    box-shadow: 0 0 8px rgba(0, 230, 118, 0.15), inset 0 0 8px rgba(0, 230, 118, 0.05);
+  }
+  .task-card.task-done .task-name { text-decoration: line-through; }
+  .task-card.task-done .task-number {
+    background: var(--green);
+  }
+  .task-card.task-done::after {
+    content: '\2713';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  .task-card.task-failed {
+    border-left: 4px solid var(--red);
+    box-shadow: 0 0 8px rgba(255, 82, 82, 0.12), inset 0 0 8px rgba(255, 82, 82, 0.05);
+  }
+  .task-card.task-failed .task-number {
+    background: var(--red);
+  }
+  .task-card.task-failed::after {
+    content: '\2717';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: var(--red);
+    font-weight: 700;
+  }
+
+  /* CARRYOVER GOLD */
+  .task-card.task-carryover {
+    border-left: 4px solid #ffd740;
+    box-shadow: 0 0 12px rgba(255, 215, 64, 0.25), 0 0 24px rgba(255, 215, 64, 0.1), inset 0 0 12px rgba(255, 215, 64, 0.05);
+    animation: gold-glow 2s ease-in-out infinite;
+  }
+  .task-card.task-carryover .task-number {
+    background: #ffd740;
+    color: #000;
+  }
+  .task-card.task-carryover::after {
+    content: '\26A0';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: #ffd740;
+  }
+  @keyframes gold-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(255, 215, 64, 0.25), 0 0 24px rgba(255, 215, 64, 0.1); }
+    50% { box-shadow: 0 0 20px rgba(255, 215, 64, 0.45), 0 0 40px rgba(255, 215, 64, 0.2); }
+  }
+
+  .carryover-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #ffd740;
+    background: rgba(255, 215, 64, 0.12);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+
+  .carryover-section-header {
+    margin-left: 50px;
+    margin-bottom: 12px;
+    padding: 10px 20px;
+    background: rgba(255, 215, 64, 0.08);
+    border: 1px solid rgba(255, 215, 64, 0.2);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #ffd740;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* MODAL */
+  .task-modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .task-modal-backdrop.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .task-modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 28px 28px;
+    min-width: 340px;
+    max-width: 440px;
+    width: 90vw;
+    position: relative;
+    transform: scale(0.92) translateY(10px);
+    transition: transform 0.25s ease;
+  }
+  .task-modal-backdrop.active .task-modal {
+    transform: scale(1) translateY(0);
+  }
+  .task-modal-close {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-size: 22px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .task-modal-close:hover {
+    background: var(--bg3);
+    color: var(--text);
+  }
+  .task-modal-title {
+    font-size: 13px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .task-modal-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    padding: 0 20px;
+  }
+  .task-modal-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .task-modal-buttons {
+    display: flex;
+    gap: 12px;
+  }
+  .task-modal-btn {
+    flex: 1;
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.5px;
+  }
+  .task-modal-btn-done {
+    background: rgba(0, 230, 118, 0.12);
+    color: var(--green);
+    border-color: var(--green);
+  }
+  .task-modal-btn-done:hover {
+    background: rgba(0, 230, 118, 0.25);
+    box-shadow: 0 0 16px rgba(0, 230, 118, 0.3);
+  }
+  .task-modal-btn-fail {
+    background: rgba(255, 82, 82, 0.12);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  .task-modal-btn-fail:hover {
+    background: rgba(255, 82, 82, 0.25);
+    box-shadow: 0 0 16px rgba(255, 82, 82, 0.3);
+  }
+
   @media (max-width: 768px) {
     .stats-row, .channels-grid { grid-template-columns: repeat(2, 1fr); }
     .header h1 { font-size: 28px; }
     .live-clock { font-size: 32px; }
+    .task-modal { min-width: 0; padding: 24px 18px 20px; }
+    .task-modal-buttons { flex-direction: column; }
   }
 </style>
 </head>
@@ -584,6 +786,20 @@
     Jarvis Mission Control &middot; 31-Day Action Plan &middot; April 10 - May 10, 2026
   </div>
 
+</div>
+
+<!-- TASK MODAL -->
+<div class="task-modal-backdrop" id="taskModal">
+  <div class="task-modal">
+    <button class="task-modal-close" onclick="closeModal()">&times;</button>
+    <div class="task-modal-title">Выполнено?</div>
+    <div class="task-modal-name" id="modalTaskName">--</div>
+    <div class="task-modal-time" id="modalTaskTime">--</div>
+    <div class="task-modal-buttons">
+      <button class="task-modal-btn task-modal-btn-done" onclick="setTaskState('done')">Да &#10003;</button>
+      <button class="task-modal-btn task-modal-btn-fail" onclick="setTaskState('failed')">Нет &#10007;</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1381,7 +1597,7 @@ function renderChannels(viewDate) {
 // ==================== TIMELINE ====================
 function renderTimeline(dateStr, dayData) {
   const tasks = dayData.tasks;
-  const completed = getCompleted(dateStr);
+  const states = getTaskStates(dateStr);
   const isToday = dateStr === todayStr;
   const uzNow = getUZDate();
   const currentMinutes = isToday ? uzNow.getHours() * 60 + uzNow.getMinutes() : -1;
@@ -1390,6 +1606,30 @@ function renderTimeline(dateStr, dayData) {
   let taskNum = 0;
   let timeIndicatorInserted = false;
 
+  // CARRYOVER SECTION
+  const carryovers = getCarryoverTasks(dateStr);
+  if (carryovers.length > 0) {
+    html += '<div class="carryover-section-header">\u26A0 \u041F\u0435\u0440\u0435\u043D\u0435\u0441\u0435\u043D\u043E \u0441 \u043F\u0440\u043E\u0448\u043B\u044B\u0445 \u0434\u043D\u0435\u0439 (' + carryovers.length + ')</div>';
+    for (let c = 0; c < carryovers.length; c++) {
+      const co = carryovers[c];
+      let cls = 'task-card task-carryover';
+
+      var safeName = escHtml(co.name).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      var safeTime = escHtml(co.time).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      html += '<div class="' + cls + '" data-co-date="' + co.sourceDateStr + '" data-co-idx="' + co.sourceIndex + '" data-co-name="' + safeName + '" data-co-time="' + safeTime + '" onclick="handleCarryoverClick(this)">';
+      html += '<div class="task-number" style="background:#ffd740;color:#000">\u26A0</div>';
+      html += '<div class="task-content">';
+      html += '<div class="task-time">' + co.time + ' <span style="color:var(--text2);font-size:10px">(' + co.sourceDateStr + ')</span></div>';
+      html += '<div class="task-name">' + escHtml(co.name) + '</div>';
+      if (co.details) html += '<div class="task-details">' + escHtml(co.details) + '</div>';
+      html += '</div>';
+      html += '<span class="carryover-badge">\u041F\u0415\u0420\u0415\u041D\u0415\u0421\u0415\u041D\u041E</span>';
+      html += '<span class="task-tag tag-' + co.tag + '" style="margin-left:6px">' + (TAG_LABELS[co.tag] || co.tag) + '</span>';
+      html += '</div>';
+    }
+  }
+
+  // REGULAR TASKS
   for (let i = 0; i < tasks.length; i++) {
     const [time, name, details, tag] = tasks[i];
     const [startStr, endStr] = time.split('-');
@@ -1405,14 +1645,15 @@ function renderTimeline(dateStr, dayData) {
     }
 
     if (tag === 'break') {
-      html += '<div class="break-card">' + time + ' &middot; ПЕРЕРЫВ</div>';
+      html += '<div class="break-card">' + time + ' &middot; \u041F\u0415\u0420\u0415\u0420\u042B\u0412</div>';
     } else {
       taskNum++;
-      const isCompleted = completed.includes(i);
+      const taskState = states[String(i)] || 'pending';
       const isCurrent = isToday && currentMinutes >= startMin && currentMinutes < endMin;
       let cls = 'task-card';
-      if (isCompleted) cls += ' completed';
-      if (isCurrent && !isCompleted) cls += ' current-task';
+      if (taskState === 'done') cls += ' task-done';
+      else if (taskState === 'failed') cls += ' task-failed';
+      if (isCurrent && taskState === 'pending') cls += ' current-task';
 
       html += '<div class="' + cls + '" onclick="toggleTask(' + i + ',\'' + dateStr + '\')">';
       html += '<div class="task-number">' + taskNum + '</div>';
@@ -1460,48 +1701,198 @@ function highlightCurrentTask() {
   if (dayData) renderTimeline(currentViewDate, dayData);
 }
 
-// ==================== TASK COMPLETION ====================
-function getStorageKey(dateStr) {
-  return 'jarvis_' + dateStr;
+// ==================== TASK COMPLETION (v2 with states) ====================
+let modalDateStr = null;
+let modalIndex = null;
+let modalIsCarryover = false;
+let modalCarryoverSource = null; // {dateStr, index}
+
+function getStorageKeyV2(dateStr) {
+  return 'jarvis_v2_' + dateStr;
 }
 
-function getCompleted(dateStr) {
+// Migrate old format if exists
+function migrateOldData(dateStr) {
+  const oldKey = 'jarvis_' + dateStr;
+  const newKey = getStorageKeyV2(dateStr);
+  if (localStorage.getItem(newKey)) return; // already migrated
   try {
-    const raw = localStorage.getItem(getStorageKey(dateStr));
-    return raw ? JSON.parse(raw) : [];
-  } catch(e) { return []; }
+    const old = localStorage.getItem(oldKey);
+    if (old) {
+      const arr = JSON.parse(old);
+      if (Array.isArray(arr) && arr.length > 0) {
+        const obj = {};
+        arr.forEach(function(i) { obj[String(i)] = 'done'; });
+        localStorage.setItem(newKey, JSON.stringify(obj));
+      }
+    }
+  } catch(e) {}
 }
 
-function saveCompleted(dateStr, arr) {
-  localStorage.setItem(getStorageKey(dateStr), JSON.stringify(arr));
+function getTaskStates(dateStr) {
+  migrateOldData(dateStr);
+  try {
+    const raw = localStorage.getItem(getStorageKeyV2(dateStr));
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
 }
 
-function toggleTask(index, dateStr) {
-  const completed = getCompleted(dateStr);
-  const pos = completed.indexOf(index);
-  if (pos === -1) {
-    completed.push(index);
-  } else {
-    completed.splice(pos, 1);
+function saveTaskStates(dateStr, obj) {
+  localStorage.setItem(getStorageKeyV2(dateStr), JSON.stringify(obj));
+}
+
+function getTaskState(dateStr, index) {
+  const states = getTaskStates(dateStr);
+  return states[String(index)] || 'pending';
+}
+
+// Backward compat wrapper used by stats
+function getCompleted(dateStr) {
+  const states = getTaskStates(dateStr);
+  const result = [];
+  for (const k in states) {
+    if (states[k] === 'done') result.push(parseInt(k));
   }
-  saveCompleted(dateStr, completed);
-  updateProgress(dateStr);
+  return result;
+}
 
-  // Re-render timeline to reflect change
+// Open modal on task click
+function toggleTask(index, dateStr) {
+  modalDateStr = dateStr;
+  modalIndex = index;
+  modalIsCarryover = false;
+  modalCarryoverSource = null;
+
   const dayData = DAYS[dateStr];
-  if (dayData) renderTimeline(dateStr, dayData);
+  if (!dayData) return;
+  const task = dayData.tasks[index];
+  if (!task || task[3] === 'break') return;
+
+  const currentState = getTaskState(dateStr, index);
+
+  document.getElementById('modalTaskName').textContent = task[1];
+  document.getElementById('modalTaskTime').textContent = task[0];
+  document.getElementById('taskModal').classList.add('active');
+}
+
+// Handle carryover click via data attributes
+function handleCarryoverClick(el) {
+  var d = el.getAttribute('data-co-date');
+  var idx = parseInt(el.getAttribute('data-co-idx'));
+  var name = el.getAttribute('data-co-name');
+  var time = el.getAttribute('data-co-time');
+  toggleCarryoverTask(d, idx, name, time);
+}
+
+// Open modal for carryover task
+function toggleCarryoverTask(sourceDateStr, sourceIndex, taskName, taskTime) {
+  modalDateStr = null;
+  modalIndex = null;
+  modalIsCarryover = true;
+  modalCarryoverSource = { dateStr: sourceDateStr, index: sourceIndex };
+
+  document.getElementById('modalTaskName').textContent = taskName;
+  document.getElementById('modalTaskTime').textContent = taskTime + ' (from ' + sourceDateStr + ')';
+  document.getElementById('taskModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('taskModal').classList.remove('active');
+  modalDateStr = null;
+  modalIndex = null;
+  modalIsCarryover = false;
+  modalCarryoverSource = null;
+}
+
+function setTaskState(state) {
+  if (modalIsCarryover && modalCarryoverSource) {
+    const states = getTaskStates(modalCarryoverSource.dateStr);
+    states[String(modalCarryoverSource.index)] = state;
+    saveTaskStates(modalCarryoverSource.dateStr, states);
+  } else if (modalDateStr !== null && modalIndex !== null) {
+    const currentState = getTaskState(modalDateStr, modalIndex);
+    const states = getTaskStates(modalDateStr);
+    if (currentState === state) {
+      // Toggle off: clicking same state removes it
+      delete states[String(modalIndex)];
+    } else {
+      states[String(modalIndex)] = state;
+    }
+    saveTaskStates(modalDateStr, states);
+  }
+
+  closeModal();
+
+  // Re-render
+  updateProgress(currentViewDate);
+  const dayData = DAYS[currentViewDate];
+  if (dayData) renderTimeline(currentViewDate, dayData);
+
+  // Update stats
+  if (dayData) {
+    const totalTasks = dayData.tasks.filter(function(t) { return t[3] !== 'break'; }).length;
+    const doneCount = getCompleted(currentViewDate).filter(function(i) { return dayData.tasks[i] && dayData.tasks[i][3] !== 'break'; }).length;
+    document.getElementById('statCompleted').textContent = doneCount;
+  }
+}
+
+// Close modal on backdrop click
+document.getElementById('taskModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+// Close modal on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ==================== CARRYOVER LOGIC ====================
+function getCarryoverTasks(dateStr) {
+  // Get all dates in DAYS that come BEFORE dateStr
+  const allDates = Object.keys(DAYS).sort();
+  const carryovers = [];
+
+  for (let d = 0; d < allDates.length; d++) {
+    const pastDate = allDates[d];
+    if (pastDate >= dateStr) break; // only past days
+
+    const pastDayData = DAYS[pastDate];
+    if (!pastDayData) continue;
+
+    const states = getTaskStates(pastDate);
+
+    for (let i = 0; i < pastDayData.tasks.length; i++) {
+      const task = pastDayData.tasks[i];
+      if (task[3] === 'break') continue;
+
+      const st = states[String(i)] || 'pending';
+      if (st !== 'done') {
+        // This task was not done on its original day
+        carryovers.push({
+          sourceDateStr: pastDate,
+          sourceIndex: i,
+          time: task[0],
+          name: task[1],
+          details: task[2],
+          tag: task[3],
+          state: st // 'pending' or 'failed'
+        });
+      }
+    }
+  }
+
+  return carryovers;
 }
 
 function updateProgress(dateStr) {
   const dayData = DAYS[dateStr];
   if (!dayData) return;
-  const totalTasks = dayData.tasks.filter(t => t[3] !== 'break').length;
-  const completed = getCompleted(dateStr);
-  const completedCount = completed.filter(i => dayData.tasks[i] && dayData.tasks[i][3] !== 'break').length;
+  const totalTasks = dayData.tasks.filter(function(t) { return t[3] !== 'break'; }).length;
+  // Only count "done" tasks toward progress (not "failed")
+  const doneCount = getCompleted(dateStr).filter(function(i) { return dayData.tasks[i] && dayData.tasks[i][3] !== 'break'; }).length;
 
-  document.getElementById('pct').textContent = completedCount + ' / ' + totalTasks;
-  document.getElementById('progress-fill').style.width = (totalTasks > 0 ? (completedCount / totalTasks * 100) : 0) + '%';
-  document.getElementById('statCompleted').textContent = completedCount;
+  document.getElementById('pct').textContent = doneCount + ' / ' + totalTasks;
+  document.getElementById('progress-fill').style.width = (totalTasks > 0 ? (doneCount / totalTasks * 100) : 0) + '%';
+  document.getElementById('statCompleted').textContent = doneCount;
 }
 
 // ==================== START ====================
