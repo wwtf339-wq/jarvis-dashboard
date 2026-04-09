@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS — Daily Mission Control</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --bg3: #1a1a2e;
+    --border: #2a2a3e;
+    --text: #e0e0e8;
+    --text2: #8888a0;
+    --accent: #6c5ce7;
+    --accent2: #a29bfe;
+    --green: #00e676;
+    --green-dim: #00e67633;
+    --orange: #ff9100;
+    --orange-dim: #ff910033;
+    --red: #ff5252;
+    --red-dim: #ff525233;
+    --blue: #448aff;
+    --blue-dim: #448aff33;
+    --cyan: #00e5ff;
+    --cyan-dim: #00e5ff33;
+    --pink: #ff4081;
+    --pink-dim: #ff408133;
+    --yellow: #ffd740;
+    --yellow-dim: #ffd74033;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .glow-line {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--cyan), var(--accent), transparent);
+    animation: glow-move 3s ease-in-out infinite;
+  }
+  @keyframes glow-move {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+  /* HEADER */
+  .header {
+    text-align: center;
+    padding: 30px 20px 20px;
+    position: relative;
+  }
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .header h1 {
+    font-size: 42px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #fff, var(--accent2), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header-date {
+    font-size: 18px;
+    color: var(--text2);
+    font-weight: 300;
+  }
+  .header-date span {
+    color: var(--cyan);
+    font-weight: 600;
+  }
+
+  /* LIVE CLOCK */
+  .live-clock {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 48px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--cyan), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 8px 0;
+    letter-spacing: 2px;
+  }
+  .clock-label {
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* NAV ARROWS */
+  .day-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin: 12px 0 4px;
+  }
+  .nav-arrow {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+  }
+  .nav-arrow:hover {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+  .nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
+    pointer-events: none;
+  }
+  .nav-today {
+    background: var(--accent);
+    border: 1px solid var(--accent2);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .nav-today:hover { background: var(--accent2); }
+  .nav-date-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: var(--text);
+    min-width: 160px;
+    text-align: center;
+  }
+
+  /* FOCUS BANNER */
+  .focus-banner {
+    background: linear-gradient(135deg, var(--bg3), #1e1e3a);
+    border: 1px solid var(--accent);
+    border-radius: 16px;
+    padding: 24px 32px;
+    margin: 20px 0 30px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .focus-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--cyan), var(--accent));
+  }
+  .focus-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 8px;
+  }
+  .focus-text {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+  .stat-number {
+    font-size: 36px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* PROGRESS BAR */
+  .progress-section { margin-bottom: 30px; }
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .progress-title {
+    font-size: 14px;
+    color: var(--text2);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .progress-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--cyan);
+  }
+  .progress-bar {
+    height: 8px;
+    background: var(--bg3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--cyan));
+    border-radius: 4px;
+    transition: width 1s ease;
+  }
+
+  /* TIMELINE */
+  .timeline { position: relative; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+
+  /* CURRENT TIME LINE */
+  .time-indicator {
+    position: relative;
+    margin-left: 10px;
+    margin-bottom: 8px;
+    margin-top: 8px;
+    height: 2px;
+    z-index: 10;
+  }
+  .time-indicator-line {
+    height: 2px;
+    background: var(--yellow);
+    box-shadow: 0 0 8px var(--yellow), 0 0 16px var(--yellow);
+    position: relative;
+  }
+  .time-indicator-label {
+    position: absolute;
+    left: 0;
+    top: -10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--yellow);
+    background: var(--bg);
+    padding: 0 6px;
+    font-weight: 600;
+  }
+  .time-indicator-dot {
+    position: absolute;
+    left: 14px;
+    top: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 8px var(--yellow);
+  }
+
+  .task-card {
+    display: flex;
+    align-items: flex-start;
+    margin-left: 50px;
+    margin-bottom: 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    position: relative;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .task-card:hover {
+    border-color: var(--accent);
+    transform: translateX(4px);
+  }
+  .task-card.completed {
+    opacity: 0.4;
+    border-color: var(--green);
+  }
+  .task-card.completed .task-name { text-decoration: line-through; }
+  .task-card::before {
+    content: '';
+    position: absolute;
+    left: -27px;
+    top: 22px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--bg);
+  }
+
+  /* CURRENT TASK GLOW */
+  .task-card.current-task {
+    border-color: var(--yellow);
+    box-shadow: 0 0 12px rgba(255, 215, 64, 0.3), 0 0 24px rgba(255, 215, 64, 0.15), inset 0 0 12px rgba(255, 215, 64, 0.05);
+    animation: current-glow 2s ease-in-out infinite;
+  }
+  .task-card.current-task::before {
+    background: var(--yellow);
+    box-shadow: 0 0 6px var(--yellow);
+  }
+  @keyframes current-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(255, 215, 64, 0.3), 0 0 24px rgba(255, 215, 64, 0.15); }
+    50% { box-shadow: 0 0 20px rgba(255, 215, 64, 0.5), 0 0 40px rgba(255, 215, 64, 0.25); }
+  }
+
+  .task-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bg);
+    background: var(--accent2);
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-right: 14px;
+    margin-top: 1px;
+  }
+
+  .task-content { flex: 1; }
+  .task-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+    margin-bottom: 4px;
+  }
+  .task-name {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text);
+  }
+  .task-details {
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .task-details ol {
+    padding-left: 18px;
+    margin-top: 4px;
+  }
+  .task-details li { margin-bottom: 2px; }
+
+  .task-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-left: 12px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .tag-warmup { background: var(--orange-dim); color: var(--orange); }
+  .tag-cc { background: var(--red-dim); color: var(--red); }
+  .tag-ta { background: var(--blue-dim); color: var(--blue); }
+  .tag-bm { background: var(--green-dim); color: var(--green); }
+  .tag-ms { background: var(--cyan-dim); color: var(--cyan); }
+  .tag-sales { background: var(--pink-dim); color: var(--pink); }
+  .tag-audit { background: var(--yellow-dim); color: var(--yellow); }
+  .tag-promo { background: #e040fb33; color: #e040fb; }
+  .tag-break { background: #ffffff11; color: #ffffff55; }
+  .tag-all { background: var(--accent2)33; color: var(--accent2); }
+  .tag-buffer { background: #78909c33; color: #78909c; }
+  .tag-best { background: #ffd74033; color: var(--yellow); }
+  .tag-infra { background: #8d6e6333; color: #bcaaa4; }
+
+  .break-card {
+    margin-left: 50px;
+    margin-bottom: 12px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: #ffffff06;
+    border: 1px dashed #ffffff15;
+    text-align: center;
+    color: var(--text2);
+    font-size: 14px;
+  }
+
+  /* CHANNELS STATUS */
+  .channels-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin: 30px 0;
+  }
+  .channel-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .channel-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .ch-cc::before { background: var(--red); }
+  .ch-ta::before { background: var(--blue); }
+  .ch-bm::before { background: var(--green); }
+  .ch-ms::before { background: var(--cyan); }
+
+  .channel-name {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .channel-stat {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  .channel-stat span:last-child {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* WARMUP INDICATOR */
+  .warmup-dots {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .warmup-dot {
+    width: 16px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+  }
+  .warmup-dot.filled { background: var(--orange); }
+  .warmup-dot.today { background: var(--orange); animation: pulse 1.5s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* NO PLAN */
+  .no-plan {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text2);
+    font-size: 20px;
+  }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    padding: 30px;
+    color: var(--text2);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 768px) {
+    .stats-row, .channels-grid { grid-template-columns: repeat(2, 1fr); }
+    .header h1 { font-size: 28px; }
+    .live-clock { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow-line"></div>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-label">Jarvis Mission Control</div>
+    <div class="live-clock" id="liveClock">--:--:--</div>
+    <div class="clock-label">Uzbekistan UTC+5</div>
+    <div class="day-nav">
+      <button class="nav-arrow" id="navPrev" onclick="navigateDay(-1)">&lt;</button>
+      <div class="nav-date-display" id="navDateDisplay">--</div>
+      <button class="nav-arrow" id="navNext" onclick="navigateDay(1)">&gt;</button>
+      <button class="nav-today" onclick="goToToday()">Сегодня</button>
+    </div>
+    <h1 id="headerTitle">--</h1>
+    <div class="header-date" id="headerSubtitle">--</div>
+  </div>
+
+  <div class="focus-banner">
+    <div class="focus-label">Фокус дня</div>
+    <div class="focus-text" id="focusText">--</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-number" style="color: var(--cyan)" id="statTasks">--</div>
+      <div class="stat-label">Заданий</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number" style="color: var(--green)" id="statCompleted">0</div>
+      <div class="stat-label">Выполнено</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number" style="color: var(--orange)" id="statWarmup">--</div>
+      <div class="stat-label">Прогрев</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number" style="color: var(--accent2)" id="statUpload">--</div>
+      <div class="stat-label" id="statUploadLabel">Дней до Upload</div>
+    </div>
+  </div>
+
+  <div class="progress-section">
+    <div class="progress-header">
+      <span class="progress-title">Прогресс дня</span>
+      <span class="progress-pct" id="pct">0 / 0</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- CHANNELS STATUS -->
+  <div class="channels-grid" id="channelsGrid"></div>
+
+  <!-- TIMELINE -->
+  <div class="timeline" id="timeline"></div>
+
+  <div class="footer">
+    Jarvis Mission Control &middot; 31-Day Action Plan &middot; April 10 - May 10, 2026
+  </div>
+
+</div>
+
+<script>
+// ==================== UZBEKISTAN TIME HELPERS ====================
+function getUZDate() {
+  return new Date(Date.now() + (5 * 60 * 60 * 1000) + (new Date().getTimezoneOffset() * 60 * 1000));
+}
+
+function formatUZTime(d) {
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+}
+
+function getUZDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// ==================== TAG CONFIG ====================
+const TAG_LABELS = {
+  warmup: 'Прогрев', cc: 'Corp Collapse', ta: 'Тёмный Архив', bm: 'Burnt Map',
+  ms: 'MindSignals', sales: 'Продажи', audit: 'Аудит', promo: 'Промо',
+  break: 'Перерыв', all: 'Все', buffer: 'Буфер', best: 'Лучший', infra: 'Инфра'
+};
+
+// ==================== ALL 31 DAYS DATA ====================
+const DAYS = {
+"2026-04-10": {
+  focus: "ПРОГРЕВ день 2/5 + Corporate Collapse #1 полностью готов",
+  tasks: [
+    ["08:00-09:00","Прогрев Corporate Collapse","3-4 видео конкурентов до 70%+, 5 лайков, 2 коммента, погуглить biggest corporate failures","warmup"],
+    ["09:00-09:20","Прогрев Тёмный Архив","3-4 русских true crime видео, подписаться на 5 каналов, 2 лайка, 1 коммент","warmup"],
+    ["09:20-09:40","Прогрев Burnt Map","RealLifeLore, Wendover, VisualPolitik — подписаться на 5 каналов, 2 лайка, 1 коммент","warmup"],
+    ["09:40-10:00","Прогрев MindSignals","Psych2Go, Charisma on Command — подписаться на 5 каналов, 2 лайка, 1 коммент","warmup"],
+    ["10:00-11:00","Подготовка текста к озвучке Corporate Collapse #1","Claude Code → /voiceover-prep для 10 Decisions That Destroyed Billion-Dollar Companies","cc"],
+    ["11:00-12:00","ElevenLabs — войсовер Corporate Collapse #1","Сгенерировать аудио, проверить первые 30 сек, скачать .mp3","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-14:00","Тамбнейл Corporate Collapse #1 в Canva","Claude Code → /thumbnail-brief, Canva: 1280x720, крупный текст 3-5 слов","cc"],
+    ["14:00-16:30","Монтаж Corporate Collapse #1 — часть 1","CapCut: импорт войсовера, intro, пункты 1-5, текстовые вставки, фоновая музыка","cc"],
+    ["16:30-19:00","Монтаж Corporate Collapse #1 — часть 2 (финал)","Пункты 6-10 + outro. Экспорт 1080p 30fps. НЕ ЗАГРУЖАТЬ — ждём 14 апреля","cc"],
+    ["19:00-19:30","SEO и заголовок Corporate Collapse #1","Claude Code → /seo + /title-test. Описание, теги, хештеги","cc"],
+    ["19:30-21:30","Написать скрипт Corporate Collapse #3","Claude Code → /write-script. Pipeline: research → draft → score → doctor → polish → fact-check","cc"],
+    ["21:30-22:30","Создать аккаунт на Fiverr","fiverr.com → регистрация, профиль, описание, навыки. Гиги НЕ создаём","sales"],
+    ["22:30-23:00","Дневной итог","Обновить статистику, MASTER_PLAN, подготовиться к завтра","audit"]
+  ]
+},
+"2026-04-11": {
+  focus: "ПРОГРЕВ день 3/5 + плейлисты + монтаж Тёмный Архив #1",
+  tasks: [
+    ["08:00-08:20","Прогрев Corporate Collapse","4-5 видео, 3 подписки, 3 коммента, СОЗДАТЬ ПЛЕЙЛИСТ Top Corporate Failures + 8 видео","warmup"],
+    ["08:20-08:40","Прогрев Тёмный Архив","4-5 видео, 3 подписки, 2 коммента, СОЗДАТЬ ПЛЕЙЛИСТ Документальные расследования + 8 видео","warmup"],
+    ["08:40-09:00","Прогрев Burnt Map","4-5 видео, 3 подписки, 2 коммента, СОЗДАТЬ ПЛЕЙЛИСТ Geopolitics Explained + 8 видео","warmup"],
+    ["09:00-09:20","Прогрев MindSignals","4-5 видео, 3 подписки, 2 коммента, СОЗДАТЬ ПЛЕЙЛИСТ Psychology & Human Behavior + 8 видео","warmup"],
+    ["09:20-11:00","Скрипт Corporate Collapse #3","Дописать + /script-polish + /fact-check","cc"],
+    ["11:00-12:00","Войсовер Тёмный Архив #1","voiceover-prep + ElevenLabs для Аум Синрикё","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Тёмный Архив #1 — часть 1","Intro + первая треть","ta"],
+    ["15:30-18:00","Монтаж Тёмный Архив #1 — часть 2","Середина документа","ta"],
+    ["18:00-19:00","Тамбнейл Тёмный Архив #1","/thumbnail-brief + Canva","ta"],
+    ["19:00-20:30","Скрипт MindSignals #2","/write-script + /script-score + доработка до A+","ms"],
+    ["20:30-21:30","Fiverr: гиг #1","YouTube Script Writer — Business & Corporate","sales"],
+    ["21:30-22:30","Fiverr: гиг #2","YouTube Script Writer — Psychology & Dark Topics","sales"],
+    ["22:30-23:00","Дневной итог","Обновить stats + /post-mortem Corporate Collapse #1","audit"]
+  ]
+},
+"2026-04-12": {
+  focus: "ПРОГРЕВ день 4/5 + Community Posts + Studio + финиш Тёмный Архив #1",
+  tasks: [
+    ["08:00-08:25","Прогрев Corporate Collapse","Просмотры + комменты, YouTube Studio, channel keywords, Community Post #1","warmup"],
+    ["08:25-08:50","Прогрев Тёмный Архив","Просмотры + комменты, Studio + keywords, Community Post #1","warmup"],
+    ["08:50-09:15","Прогрев Burnt Map","Просмотры + комменты, Studio + keywords, Community Post #1","warmup"],
+    ["09:15-09:40","Прогрев MindSignals","Просмотры + комменты, Studio + keywords, Community Post #1","warmup"],
+    ["09:40-11:00","Скрипт MindSignals #2","Дописать + /script-polish + /fact-check","ms"],
+    ["11:00-12:00","Монтаж Тёмный Архив #1 — часть 3","Последняя треть","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:00","Монтаж Тёмный Архив #1 — часть 4 (финал)","Финализация, звук, цветокоррекция","ta"],
+    ["15:00-16:00","SEO Тёмный Архив #1","/seo + /title-test","ta"],
+    ["16:00-18:00","Скрипт Burnt Map #2","/write-script + /script-score + доработка до A+","bm"],
+    ["18:00-18:30","Polish Burnt Map #2","/script-polish + /fact-check","bm"],
+    ["18:30-20:00","Upwork: создать профиль","YouTube Script Writer","sales"],
+    ["20:00-22:00","Скрипт Corporate Collapse #4","/write-script + /script-score + доработка до A+","cc"],
+    ["22:00-22:30","Polish Corporate Collapse #4","/script-polish + /fact-check","cc"],
+    ["22:30-23:00","Дневной итог","Обновить stats всех каналов","audit"]
+  ]
+},
+"2026-04-13": {
+  focus: "ПРОГРЕВ день 5/5 + Community Post #2 (poll) + монтаж Corporate Collapse #2",
+  tasks: [
+    ["08:00-08:25","Прогрев Corporate Collapse","Просмотры + комменты, 2-й плейлист, Community Post #2 (ОПРОС)","warmup"],
+    ["08:25-08:50","Прогрев Тёмный Архив","Просмотры + комменты, 2-й плейлист, Community Post #2 (ОПРОС)","warmup"],
+    ["08:50-09:15","Прогрев Burnt Map","Просмотры + комменты, 2-й плейлист, Community Post #2 (ОПРОС)","warmup"],
+    ["09:15-09:40","Прогрев MindSignals","Просмотры + комменты, 2-й плейлист, Community Post #2 (ОПРОС)","warmup"],
+    ["09:40-10:00","Analytics все 4 аккаунта","Зайти в Analytics на каждом, покликать по разделам","warmup"],
+    ["10:00-11:00","Войсовер Corporate Collapse #2","voiceover-prep + ElevenLabs для 10 CEOs","cc"],
+    ["11:00-12:00","Тамбнейл Corporate Collapse #2","/thumbnail-brief + Canva","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #2 — часть 1","CapCut","cc"],
+    ["15:30-18:00","Монтаж Corporate Collapse #2 — часть 2 (финал)","Экспорт + /seo","cc"],
+    ["18:00-18:30","SEO Corporate Collapse #2","Описание, теги","cc"],
+    ["18:30-20:00","Скрипт MindSignals #3","/write-script + /script-score + доработка до A+","ms"],
+    ["20:00-20:30","Polish MindSignals #3","/script-polish + /fact-check","ms"],
+    ["20:30-22:00","Скрипт Тёмный Архив #2","/write-script + /script-score + доработка до A+","ta"],
+    ["22:00-22:30","Polish Тёмный Архив #2","/script-polish + /fact-check","ta"],
+    ["22:30-23:00","Дневной итог","Последний день прогрева! Завтра — ДЕНЬ ЗАПУСКА","audit"]
+  ]
+},
+"2026-04-14": {
+  focus: "ДЕНЬ ЗАПУСКА — UPLOAD Corporate Collapse #1 + Тёмный Архив #1",
+  tasks: [
+    ["08:00-08:25","Финальный прогрев Corporate Collapse","Community Post #3, Upload Defaults в Studio","warmup"],
+    ["08:25-08:50","Финальный прогрев Тёмный Архив","Community Post #3, Upload Defaults","warmup"],
+    ["08:50-09:15","Финальный прогрев Burnt Map","Community Post #3, Upload Defaults","warmup"],
+    ["09:15-09:40","Финальный прогрев MindSignals","Community Post #3, Upload Defaults","warmup"],
+    ["09:40-10:00","Проверка Corporate Collapse #1","Видео, тамбнейл, SEO, описание — всё на месте?","cc"],
+    ["10:00-10:30","UPLOAD Corporate Collapse #1","Загрузить на YouTube + запланировать","cc"],
+    ["10:30-11:00","Проверка Тёмный Архив #1","Видео, тамбнейл, SEO — всё на месте?","ta"],
+    ["11:00-11:30","UPLOAD Тёмный Архив #1","Загрузить на YouTube","ta"],
+    ["11:30-12:00","Community posts","Анонсы видео на обоих каналах","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-14:00","Войсовер MindSignals #1","voiceover-prep + ElevenLabs","ms"],
+    ["14:00-14:30","Тамбнейл MindSignals #1","/thumbnail-brief + Canva","ms"],
+    ["14:30-17:00","Монтаж MindSignals #1 — часть 1","CapCut","ms"],
+    ["17:00-19:00","Монтаж MindSignals #1 — часть 2 (финал)","/seo","ms"],
+    ["19:00-20:30","Cold Outreach","Найти 20 каналов 50K-300K, написать 10 DM","sales"],
+    ["20:30-22:00","Скрипт Burnt Map #3","/write-script + /script-score + доработка до A+","bm"],
+    ["22:00-22:30","Polish Burnt Map #3","/script-polish + /fact-check","bm"],
+    ["22:30-23:00","Дневной итог","ПЕРВЫЕ UPLOADS! Обновить stats","audit"]
+  ]
+},
+"2026-04-15": {
+  focus: "UPLOAD Corporate Collapse #2 + MindSignals #1 + монтаж Burnt Map #1",
+  tasks: [
+    ["08:00-08:30","UPLOAD Corporate Collapse #2","Финальная проверка + загрузка","cc"],
+    ["08:30-09:00","UPLOAD MindSignals #1","Финальная проверка + загрузка","ms"],
+    ["09:00-10:00","Войсовер Burnt Map #1","voiceover-prep Strait of Hormuz + ElevenLabs","bm"],
+    ["10:00-11:00","Тамбнейл Burnt Map #1","/thumbnail-brief + Canva","bm"],
+    ["11:00-12:00","Community posts","Анонсы Corporate Collapse #2 + MindSignals #1","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #1 — часть 1","Длинный формат 15-25 мин","bm"],
+    ["15:30-18:00","Монтаж Burnt Map #1 — часть 2","Продолжение","bm"],
+    ["18:00-19:00","Монтаж Burnt Map #1 — часть 3 (финал)","/seo","bm"],
+    ["19:00-20:30","Cold Outreach","Ещё 10 DM + follow-up","sales"],
+    ["20:30-22:00","Скрипт Corporate Collapse #5","/write-script + /script-score + доработка до A+","cc"],
+    ["22:00-22:30","Polish Corporate Collapse #5","/script-polish + /fact-check","cc"],
+    ["22:30-23:00","Дневной итог","/post-mortem Corporate Collapse #1","audit"]
+  ]
+},
+"2026-04-16": {
+  focus: "UPLOAD Burnt Map #1 + монтаж Corporate Collapse #3 + Мультиплатформа",
+  tasks: [
+    ["08:00-08:30","UPLOAD Burnt Map #1","Финальная проверка + загрузка","bm"],
+    ["08:30-10:00","Войсовер Тёмный Архив #2 + тамбнейл","ElevenLabs + /thumbnail-brief + Canva","ta"],
+    ["10:00-11:00","Войсовер Corporate Collapse #3","ElevenLabs","cc"],
+    ["11:00-12:00","Тамбнейл Corporate Collapse #3","Canva","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #3 — часть 1","CapCut","cc"],
+    ["15:30-18:00","Монтаж Corporate Collapse #3 — часть 2 (финал)","/seo","cc"],
+    ["18:00-19:00","Создать аккаунт X (Twitter)","Профиль, аватар, bio как scriptwriter","promo"],
+    ["19:00-20:00","Создать аккаунт Reddit","Подписаться на r/business r/investing r/psychology r/Documentaries r/geopolitics","promo"],
+    ["20:00-21:00","Создать аккаунт TikTok","Профиль, link in bio → YouTube","promo"],
+    ["21:00-22:00","Скрипт MindSignals #4","/write-script + /script-score + доработка","ms"],
+    ["22:00-22:30","/competitor-watch + /trend-scan","Все ниши","audit"],
+    ["22:30-23:00","НЕДЕЛЯ 1 ЗАВЕРШЕНА","Итоги, обновить MASTER_PLAN + все stats","audit"]
+  ]
+},
+"2026-04-17": {
+  focus: "UPLOAD Corporate Collapse #3 + монтаж Тёмный Архив #2 + Первые посты",
+  tasks: [
+    ["08:00-08:30","UPLOAD Corporate Collapse #3","Загрузить смонтированное вчера","cc"],
+    ["08:30-10:00","Войсовер + тамбнейл Тёмный Архив #2","ElevenLabs + Canva","ta"],
+    ["10:00-12:00","Скрипт MindSignals #5","/write-script + /script-score + доработка до A+","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Тёмный Архив #2 — часть 1","CapCut","ta"],
+    ["15:30-18:00","Монтаж Тёмный Архив #2 — часть 2 (финал) + /seo","Финализация","ta"],
+    ["18:00-19:00","X: первый тред","5 corporate failures people still don't understand — промо Corporate Collapse","promo"],
+    ["19:00-20:00","Reddit: первый value-пост","r/business — инсайт из скрипта, НЕ прямая реклама","promo"],
+    ["20:00-21:00","TikTok: 3 клипа","Нарезать 30-60 сек из Corporate Collapse #1 и #2","promo"],
+    ["21:00-22:00","Fiverr/Upwork","Проверить сообщения + ответить","sales"],
+    ["22:00-23:00","Cold Outreach","5 DM + follow-up","sales"]
+  ]
+},
+"2026-04-18": {
+  focus: "UPLOAD Тёмный Архив #2 + монтаж MindSignals #2",
+  tasks: [
+    ["08:00-08:30","UPLOAD Тёмный Архив #2","Загрузить","ta"],
+    ["08:30-09:30","Войсовер MindSignals #2","ElevenLabs","ms"],
+    ["09:30-10:30","Тамбнейл MindSignals #2","Canva","ms"],
+    ["10:30-12:00","Скрипт Burnt Map #4","/write-script + /script-score + доработка","bm"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж MindSignals #2 — часть 1","CapCut","ms"],
+    ["15:30-17:30","Монтаж MindSignals #2 — часть 2 (финал) + /seo","Финализация","ms"],
+    ["17:30-18:30","Войсовер Corporate Collapse #4","ElevenLabs + тамбнейл","cc"],
+    ["18:30-19:30","Промо: TT + X + Reddit","3 клипа из Тёмный Архив + пост + r/psychology","promo"],
+    ["19:30-21:30","Скрипт Corporate Collapse #6","/write-script + /script-score + доработка до A+","cc"],
+    ["21:30-23:00","Скрипт Тёмный Архив #3","/write-script + research","ta"]
+  ]
+},
+"2026-04-19": {
+  focus: "UPLOAD MindSignals #2 + монтаж Corporate Collapse #4",
+  tasks: [
+    ["08:00-08:30","UPLOAD MindSignals #2","Загрузить","ms"],
+    ["08:30-10:00","Скрипт Тёмный Архив #3","Дописать + /script-polish + /fact-check","ta"],
+    ["10:00-12:00","Монтаж Corporate Collapse #4 — часть 1","CapCut","cc"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #4 — часть 2 (финал) + /seo","Финализация","cc"],
+    ["15:30-16:30","Войсовер + тамбнейл Burnt Map #2","ElevenLabs + Canva","bm"],
+    ["16:30-17:30","Промо: TT клипы из MindSignals","3 клипа 30-60 сек","promo"],
+    ["17:30-18:00","X: тред про geopolitics","Промо Burnt Map","promo"],
+    ["18:00-18:30","Reddit: r/geopolitics","Value-пост","promo"],
+    ["18:30-20:00","Polish Corporate Collapse #6","/script-polish + /fact-check","cc"],
+    ["20:00-21:30","Fiverr/Upwork + 5 cold DM","Проверить + outreach","sales"],
+    ["21:30-23:00","Скрипт MindSignals #6","/write-script + /script-score","ms"]
+  ]
+},
+"2026-04-20": {
+  focus: "UPLOAD Corporate Collapse #4 + монтаж Burnt Map #2 + АУДИТ",
+  tasks: [
+    ["08:00-08:30","UPLOAD Corporate Collapse #4","Загрузить","cc"],
+    ["08:30-10:00","Войсовер + тамбнейл Тёмный Архив #3","ElevenLabs + Canva","ta"],
+    ["10:00-12:00","Скрипт MindSignals #6","Дописать + /script-polish + /fact-check","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #2 — часть 1","CapCut","bm"],
+    ["15:30-18:00","Монтаж Burnt Map #2 — часть 2 (финал) + /seo","Финализация","bm"],
+    ["18:00-19:00","Промо: TT batch + X + Reddit","4 клипа + тред + r/todayilearned","promo"],
+    ["19:00-19:30","X: тред + реплаи","Рост аудитории","promo"],
+    ["19:30-20:00","Reddit: r/todayilearned","Value-пост","promo"],
+    ["20:00-21:00","Post-mortem всех видео","CC #1-4, ТА #1-2, MS #1-2, BM #1","audit"],
+    ["21:00-22:00","ЕЖЕНЕДЕЛЬНЫЙ АУДИТ","Analytics, MASTER_PLAN, все stats","audit"],
+    ["22:00-22:30","Cold Outreach: 5 DM","+ follow-up","sales"],
+    ["22:30-23:00","Планирование недели 3","Скорректировать приоритеты","audit"]
+  ]
+},
+"2026-04-21": {
+  focus: "UPLOAD Burnt Map #2 + Тёмный Архив #3 + монтаж Corporate Collapse #5",
+  tasks: [
+    ["08:00-08:30","UPLOAD Burnt Map #2","Загрузить","bm"],
+    ["08:30-10:00","Войсовер + тамбнейл Corporate Collapse #5","ElevenLabs + Canva","cc"],
+    ["10:00-12:00","Монтаж Тёмный Архив #3 — часть 1","CapCut","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:00","Монтаж Тёмный Архив #3 — часть 2 (финал) + /seo","Финализация","ta"],
+    ["15:00-15:30","UPLOAD Тёмный Архив #3","Загрузить","ta"],
+    ["15:30-18:00","Монтаж Corporate Collapse #5 — часть 1","CapCut","cc"],
+    ["18:00-19:00","Промо: TT + X + Reddit","3 клипа + тред manipulation/psychology + r/investing","promo"],
+    ["19:00-19:30","Reddit: r/investing","Value-пост","promo"],
+    ["19:30-21:00","Скрипт Burnt Map #5","/write-script + /script-score + доработка + /fact-check","bm"],
+    ["21:00-22:30","Cold Outreach: 5 DM с метриками","+ обновить Fiverr гиги","sales"],
+    ["22:30-23:00","Дневной итог","Обновить stats","audit"]
+  ]
+},
+"2026-04-22": {
+  focus: "UPLOAD Corporate Collapse #5 + монтаж MindSignals #3",
+  tasks: [
+    ["08:00-09:00","Монтаж Corporate Collapse #5 — финал + /seo","Завершить","cc"],
+    ["09:00-09:30","UPLOAD Corporate Collapse #5","Загрузить","cc"],
+    ["09:30-11:00","Войсовер + тамбнейл MindSignals #3","ElevenLabs + Canva","ms"],
+    ["11:00-12:00","Скрипт Тёмный Архив #4","/write-script + /script-score + доработка","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж MindSignals #3 — часть 1","CapCut","ms"],
+    ["15:30-18:00","Монтаж MindSignals #3 — часть 2 (финал) + /seo","Финализация","ms"],
+    ["18:00-19:00","Промо: TT + X + Reddit","3 клипа из Burnt Map + пост + r/Documentaries","promo"],
+    ["19:00-20:30","Скрипт Corporate Collapse #7","/write-script + /script-score + доработка до A+","cc"],
+    ["20:30-21:00","Polish Тёмный Архив #4","/script-polish + /fact-check","ta"],
+    ["21:00-22:30","Cold Outreach: 5 DM + кейс","Создать кейс с метриками","sales"],
+    ["22:30-23:00","Дневной итог","Обновить stats","audit"]
+  ]
+},
+"2026-04-23": {
+  focus: "UPLOAD MindSignals #3 + монтаж Burnt Map #3 + НЕДЕЛЯ 2",
+  tasks: [
+    ["08:00-08:30","UPLOAD MindSignals #3","Загрузить","ms"],
+    ["08:30-09:30","Войсовер + тамбнейл Burnt Map #3","ElevenLabs + Canva","bm"],
+    ["09:30-11:00","Войсовер + тамбнейл Corporate Collapse #6","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Скрипт MindSignals #7","/write-script + /script-score","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-16:00","Монтаж Burnt Map #3 — часть 1","Длинный формат","bm"],
+    ["16:00-18:30","Монтаж Burnt Map #3 — часть 2 (финал) + /seo","Финализация","bm"],
+    ["18:30-19:30","Промо: TT + X + Reddit","4 клипа + тред psychological tricks + r/psychology","promo"],
+    ["19:30-21:00","Скрипт MindSignals #7","Дописать + /script-polish + /fact-check","ms"],
+    ["21:00-22:00","Cold Outreach: 5 DM + кейс","Fiverr/Upwork ответы","sales"],
+    ["22:00-23:00","НЕДЕЛЯ 2 ЗАВЕРШЕНА","Итоги, обновить MASTER_PLAN + все stats","audit"]
+  ]
+},
+"2026-04-24": {
+  focus: "Corporate Collapse #8 + MindSignals #4 — крейсерская скорость",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics все каналы — views, CTR, retention","audit"],
+    ["08:00-09:30","Скрипт Corporate Collapse #8","/write-script + score + доработка","cc"],
+    ["09:30-10:30","Войсовер + тамбнейл Corporate Collapse #8","ElevenLabs + Canva","cc"],
+    ["10:30-12:00","Войсовер + тамбнейл MindSignals #4","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #8 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #4 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред business failures","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост","Нишевый сабреддит","promo"],
+    ["19:30-21:00","Буферный скрипт","Ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr + 5 DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem свежих видео","Анализ","audit"]
+  ]
+},
+"2026-04-25": {
+  focus: "UPLOAD Corporate Collapse #9 + MindSignals #5",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Burnt Map","/write-script + /script-score + доработка до A+","bm"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","bm"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #9","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #5","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #9 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #5 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — psychology hacks","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/psychology","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-04-26": {
+  focus: "UPLOAD Burnt Map #3 + Тёмный Архив #4",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Corporate Collapse","/write-script + /script-score + доработка до A+","cc"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","cc"],
+    ["10:00-11:00","Войсовер + тамбнейл Burnt Map #3","ElevenLabs + Canva","bm"],
+    ["11:00-12:00","Войсовер + тамбнейл Тёмный Архив #4","ElevenLabs + Canva","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #3 + /seo + UPLOAD","CapCut","bm"],
+    ["15:30-18:00","Монтаж Тёмный Архив #4 + /seo + UPLOAD","CapCut","ta"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — geopolitics insight","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/geopolitics","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-04-27": {
+  focus: "АУДИТ НЕДЕЛИ 3 + Corporate Collapse #10 + MindSignals #6",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","Retention >50%? CTR >5%?","audit"],
+    ["08:00-09:30","Скрипт Corporate Collapse #10","/write-script + score","cc"],
+    ["09:30-11:00","Войсовер + тамбнейлы Corporate Collapse #10 и MindSignals #6","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Скрипт MindSignals буфер","Дополнительный","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #10 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #6 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-19:00","TT: batch 5 клипов","Из лучших видео","promo"],
+    ["19:00-19:30","X: тред + реплаи","Рост аудитории","promo"],
+    ["19:30-20:00","Reddit: r/todayilearned","Value-пост","promo"],
+    ["20:00-21:00","Post-mortem всех видео недели","Анализ","audit"],
+    ["21:00-22:00","ЕЖЕНЕДЕЛЬНЫЙ АУДИТ","MASTER_PLAN, все stats","audit"],
+    ["22:00-22:30","Обновить Fiverr метриками","Реальные цифры","sales"],
+    ["22:30-23:00","Планирование недели 4","Корректировка","audit"]
+  ]
+},
+"2026-04-28": {
+  focus: "UPLOAD Corporate Collapse #11 + MindSignals #7",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Тёмный Архив","/write-script + /script-score + доработка до A+","ta"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","ta"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #11","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #7","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #11 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #7 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — manipulation signs","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/business","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-04-29": {
+  focus: "UPLOAD Burnt Map #4 + Тёмный Архив #5",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для MindSignals","/write-script + /script-score + доработка до A+","ms"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","ms"],
+    ["10:00-11:00","Войсовер + тамбнейл Burnt Map #4","ElevenLabs + Canva","bm"],
+    ["11:00-12:00","Войсовер + тамбнейл Тёмный Архив #5","ElevenLabs + Canva","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #4 + /seo + UPLOAD","CapCut","bm"],
+    ["15:30-18:00","Монтаж Тёмный Архив #5 + /seo + UPLOAD","CapCut","ta"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — war economics","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/investing","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-04-30": {
+  focus: "UPLOAD Corporate Collapse #12 + MindSignals #8",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Corporate Collapse","/write-script + /script-score + доработка до A+","cc"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","cc"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #12","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #8","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #12 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #8 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — biggest corporate frauds","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/Documentaries","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-01": {
+  focus: "UPLOAD Corporate Collapse #13 + MindSignals #9",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Burnt Map","/write-script + /script-score + доработка до A+","bm"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","bm"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #13","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #9","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #13 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #9 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — CEO disasters","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/business","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-02": {
+  focus: "UPLOAD Burnt Map #5 + Тёмный Архив #6",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Corporate Collapse","/write-script + /script-score + доработка до A+","cc"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","cc"],
+    ["10:00-11:00","Войсовер + тамбнейл Burnt Map #5","ElevenLabs + Canva","bm"],
+    ["11:00-12:00","Войсовер + тамбнейл Тёмный Архив #6","ElevenLabs + Canva","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #5 + /seo + UPLOAD","CapCut","bm"],
+    ["15:30-18:00","Монтаж Тёмный Архив #6 + /seo + UPLOAD","CapCut","ta"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — dark history facts","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/todayilearned","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-03": {
+  focus: "UPLOAD Corporate Collapse #14 + MindSignals #10",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для MindSignals","/write-script + /script-score + доработка до A+","ms"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","ms"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #14","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #10","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #14 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #10 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — hidden psychology","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/psychology","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-04": {
+  focus: "АУДИТ НЕДЕЛИ 4 + ОПТИМИЗАЦИЯ",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","Полный обзор всех каналов","audit"],
+    ["08:00-10:00","ОПТИМИЗАЦИЯ","Переделать тамбнейлы с низким CTR","all"],
+    ["10:00-12:00","2 скрипта для лучшего канала","Удвоить что работает","best"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:00","Монтаж + upload лучшего канала","Приоритет","best"],
+    ["15:00-17:00","Notion-портфолио","Создать с метриками за 3 недели","sales"],
+    ["17:00-18:00","Fiverr: третий гиг","Script + SEO Package","sales"],
+    ["18:00-19:00","TT: batch 5 клипов","Из топ-видео","promo"],
+    ["19:00-20:00","X: тред с метриками","Позиционирование как scriptwriter","promo"],
+    ["20:00-21:00","ЕЖЕНЕДЕЛЬНЫЙ АУДИТ","Обновить всё","audit"],
+    ["21:00-22:00","Cold Outreach: 10 DM","С реальными кейсами","sales"],
+    ["22:00-23:00","Планирование финальной недели","Корректировка","audit"]
+  ]
+},
+"2026-05-05": {
+  focus: "UPLOAD Corporate Collapse #15 + MindSignals #11",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Burnt Map","/write-script + /script-score + доработка до A+","bm"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","bm"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #15","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #11","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #15 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #11 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — startup failures","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/investing","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-06": {
+  focus: "UPLOAD Burnt Map #6 + Тёмный Архив #7",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Тёмный Архив","/write-script + /script-score + доработка до A+","ta"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","ta"],
+    ["10:00-11:00","Войсовер + тамбнейл Burnt Map #6","ElevenLabs + Canva","bm"],
+    ["11:00-12:00","Войсовер + тамбнейл Тёмный Архив #7","ElevenLabs + Canva","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #6 + /seo + UPLOAD","CapCut","bm"],
+    ["15:30-18:00","Монтаж Тёмный Архив #7 + /seo + UPLOAD","CapCut","ta"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — true crime insights","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/Documentaries","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-07": {
+  focus: "UPLOAD Corporate Collapse #16 + MindSignals #12",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Corporate Collapse","/write-script + /script-score + доработка до A+","cc"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","cc"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #16","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #12","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #16 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #12 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — money psychology","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/psychology","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-08": {
+  focus: "UPLOAD Corporate Collapse #17 + MindSignals #13",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для MindSignals","/write-script + /script-score + доработка до A+","ms"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","ms"],
+    ["10:00-11:00","Войсовер + тамбнейл Corporate Collapse #17","ElevenLabs + Canva","cc"],
+    ["11:00-12:00","Войсовер + тамбнейл MindSignals #13","ElevenLabs + Canva","ms"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Corporate Collapse #17 + /seo + UPLOAD","CapCut","cc"],
+    ["15:30-18:00","Монтаж MindSignals #13 + /seo + UPLOAD","CapCut","ms"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — corporate fraud signs","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/business","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-09": {
+  focus: "UPLOAD Burnt Map #7 + Тёмный Архив #8",
+  tasks: [
+    ["07:00-08:00","АНАЛИТИКА","YouTube Analytics — views, CTR, retention","audit"],
+    ["08:00-09:30","Новый скрипт для Burnt Map","/write-script + /script-score + доработка до A+","bm"],
+    ["09:30-10:00","/script-polish + /fact-check","Полировка и проверка фактов","bm"],
+    ["10:00-11:00","Войсовер + тамбнейл Burnt Map #7","ElevenLabs + Canva","bm"],
+    ["11:00-12:00","Войсовер + тамбнейл Тёмный Архив #8","ElevenLabs + Canva","ta"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-15:30","Монтаж Burnt Map #7 + /seo + UPLOAD","CapCut","bm"],
+    ["15:30-18:00","Монтаж Тёмный Архив #8 + /seo + UPLOAD","CapCut","ta"],
+    ["18:00-18:30","TT: 3 клипа","Из сегодняшних видео","promo"],
+    ["18:30-19:00","X: тред — geopolitical shifts","Промо","promo"],
+    ["19:00-19:30","Reddit: value-пост на r/geopolitics","Нишевый контент","promo"],
+    ["19:30-21:00","Второй скрипт за день","Буфер, ротация каналов","buffer"],
+    ["21:00-22:00","Fiverr/Upwork + 5 cold DM","Ответы + outreach","sales"],
+    ["22:00-23:00","Post-mortem + дневной итог","Видео 48ч назад","audit"]
+  ]
+},
+"2026-05-10": {
+  focus: "БОЛЬШОЙ АУДИТ — МЕСЯЦ ЗАВЕРШЁН",
+  tasks: [
+    ["08:00-09:00","YouTube Analytics","Полная выгрузка метрик","audit"],
+    ["09:00-10:00","Подсчёт видео","Видео, подписчики, просмотры","audit"],
+    ["10:00-11:00","Подсчёт промо","TT, X, Reddit reach","audit"],
+    ["11:00-12:00","Подсчёт продаж","Fiverr заказы, доход","audit"],
+    ["12:00-13:00","ПЕРЕРЫВ","","break"],
+    ["13:00-14:00","АНАЛИЗ: темы/форматы","Лучший retention и CTR","audit"],
+    ["14:00-15:00","АНАЛИЗ: промо-каналы","Больше трафика","audit"],
+    ["15:00-16:00","АНАЛИЗ: продажи","Что работает","audit"],
+    ["16:00-17:00","РЕШЕНИЯ","Удвоить что работает, убить что нет","audit"],
+    ["17:00-18:00","ПЛАН НА МАЙ-ИЮНЬ","С учётом всех данных","audit"],
+    ["18:00-19:00","Обновить всё","MASTER_PLAN, stats, memory","audit"],
+    ["19:00-20:00","Обновить профили","Fiverr/Upwork с метриками","sales"],
+    ["20:00-21:00","15 cold DM","С месячным кейсом","sales"],
+    ["21:00-23:00","Скрипты на следующую неделю","2 штуки","buffer"]
+  ]
+}
+};
+
+// ==================== DAY NAMES ====================
+const DAY_NAMES_RU = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const MONTH_NAMES_RU = ['Января','Февраля','Марта','Апреля','Мая','Июня','Июля','Августа','Сентября','Октября','Ноября','Декабря'];
+
+// ==================== STATE ====================
+let currentViewDate = null; // YYYY-MM-DD string
+let todayStr = null;
+
+// ==================== INIT ====================
+function init() {
+  const uzNow = getUZDate();
+  todayStr = getUZDateStr(uzNow);
+  currentViewDate = todayStr;
+  renderDay(currentViewDate);
+  startClock();
+  // Re-check current task every 30 seconds
+  setInterval(function() {
+    const newToday = getUZDateStr(getUZDate());
+    if (newToday !== todayStr) {
+      todayStr = newToday;
+      if (currentViewDate === todayStr || currentViewDate === getUZDateStr(new Date(getUZDate().getTime() - 86400000))) {
+        currentViewDate = todayStr;
+        renderDay(currentViewDate);
+      }
+    }
+    if (currentViewDate === todayStr) {
+      highlightCurrentTask();
+    }
+  }, 30000);
+}
+
+// ==================== CLOCK ====================
+function startClock() {
+  function tick() {
+    const uzNow = getUZDate();
+    document.getElementById('liveClock').textContent = formatUZTime(uzNow);
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ==================== NAVIGATION ====================
+function navigateDay(delta) {
+  const d = parseDateStr(currentViewDate);
+  d.setDate(d.getDate() + delta);
+  currentViewDate = getUZDateStr(d);
+  renderDay(currentViewDate);
+}
+
+function goToToday() {
+  todayStr = getUZDateStr(getUZDate());
+  currentViewDate = todayStr;
+  renderDay(currentViewDate);
+}
+
+function parseDateStr(s) {
+  const parts = s.split('-');
+  return new Date(+parts[0], +parts[1]-1, +parts[2]);
+}
+
+// ==================== RENDER ====================
+function renderDay(dateStr) {
+  const dayData = DAYS[dateStr];
+  const d = parseDateStr(dateStr);
+  const dayOfWeek = DAY_NAMES_RU[d.getDay()];
+  const dayNum = d.getDate();
+  const monthName = MONTH_NAMES_RU[d.getMonth()];
+  const year = d.getFullYear();
+
+  // Day number in plan (April 10 = day 1)
+  const planStart = new Date(2026, 3, 10); // April 10
+  const diffDays = Math.floor((d - planStart) / 86400000) + 1;
+
+  // Header
+  document.getElementById('headerTitle').textContent = dayNum + ' ' + monthName.toUpperCase() + ' ' + year;
+  const isToday = dateStr === todayStr;
+  let subtitle = dayOfWeek;
+  if (diffDays >= 1 && diffDays <= 31) subtitle += ' \u00B7 День ' + diffDays + ' из 31';
+  if (isToday) subtitle += ' \u00B7 СЕГОДНЯ';
+  subtitle += ' \u00B7 Узбекистан UTC+5';
+  document.getElementById('headerSubtitle').innerHTML = subtitle;
+  document.getElementById('navDateDisplay').textContent = dateStr;
+
+  // Focus
+  if (dayData) {
+    document.getElementById('focusText').textContent = dayData.focus;
+  } else {
+    document.getElementById('focusText').textContent = 'Нет плана на этот день';
+  }
+
+  // Stats
+  if (dayData) {
+    const totalTasks = dayData.tasks.filter(t => t[3] !== 'break').length;
+    const completedIndices = getCompleted(dateStr);
+    const completedCount = completedIndices.filter(i => dayData.tasks[i] && dayData.tasks[i][3] !== 'break').length;
+
+    document.getElementById('statTasks').textContent = totalTasks;
+    document.getElementById('statCompleted').textContent = completedCount;
+
+    // Warmup: April 9 (day 0) to April 13 (day 4). 5 days total.
+    const warmupStart = new Date(2026, 3, 9);
+    const warmupEnd = new Date(2026, 3, 13);
+    const warmupDaysPassed = Math.max(0, Math.min(5, Math.floor((d - warmupStart) / 86400000) + 1));
+    if (d >= warmupStart && d <= warmupEnd) {
+      document.getElementById('statWarmup').textContent = warmupDaysPassed + '/5';
+    } else if (d > warmupEnd) {
+      document.getElementById('statWarmup').textContent = 'DONE';
+    } else {
+      document.getElementById('statWarmup').textContent = '--';
+    }
+
+    // Days until upload (April 14)
+    const uploadDate = new Date(2026, 3, 14);
+    const daysUntilUpload = Math.ceil((uploadDate - d) / 86400000);
+    if (daysUntilUpload > 0) {
+      document.getElementById('statUpload').textContent = daysUntilUpload;
+      document.getElementById('statUploadLabel').textContent = 'Дней до Upload';
+    } else if (daysUntilUpload === 0) {
+      document.getElementById('statUpload').textContent = 'TODAY';
+      document.getElementById('statUploadLabel').textContent = 'Upload Day!';
+    } else {
+      document.getElementById('statUpload').textContent = Math.abs(daysUntilUpload);
+      document.getElementById('statUploadLabel').textContent = 'Дней с запуска';
+    }
+
+    // Progress
+    updateProgress(dateStr);
+
+    // Channels
+    renderChannels(d);
+
+    // Timeline
+    renderTimeline(dateStr, dayData);
+  } else {
+    document.getElementById('statTasks').textContent = '--';
+    document.getElementById('statCompleted').textContent = '0';
+    document.getElementById('statWarmup').textContent = '--';
+    document.getElementById('statUpload').textContent = '--';
+    document.getElementById('statUploadLabel').textContent = '--';
+    document.getElementById('pct').textContent = '0 / 0';
+    document.getElementById('progress-fill').style.width = '0%';
+    renderChannels(d);
+    document.getElementById('timeline').innerHTML = '<div class="no-plan">Нет плана на этот день</div>';
+  }
+}
+
+// ==================== CHANNELS ====================
+function renderChannels(viewDate) {
+  const warmupStart = new Date(2026, 3, 9);
+  const warmupEnd = new Date(2026, 3, 13);
+  const warmupDaysPassed = Math.max(0, Math.min(5, Math.floor((viewDate - warmupStart) / 86400000) + 1));
+  const todayDate = parseDateStr(todayStr);
+  const warmupTodayIndex = Math.max(0, Math.min(5, Math.floor((todayDate - warmupStart) / 86400000) + 1));
+
+  function warmupDots() {
+    let html = '<div class="warmup-dots">';
+    for (let i = 0; i < 5; i++) {
+      if (i < warmupDaysPassed - 1) {
+        html += '<div class="warmup-dot filled"></div>';
+      } else if (i === warmupDaysPassed - 1 && viewDate <= warmupEnd) {
+        html += '<div class="warmup-dot today"></div>';
+      } else if (i < warmupDaysPassed) {
+        html += '<div class="warmup-dot filled"></div>';
+      } else {
+        html += '<div class="warmup-dot"></div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  const channels = [
+    { cls: 'ch-cc', name: 'Corporate Collapse', color: 'var(--red)', scripts: 2 },
+    { cls: 'ch-ta', name: 'Тёмный Архив', color: 'var(--blue)', scripts: 1 },
+    { cls: 'ch-bm', name: 'Burnt Map', color: 'var(--green)', scripts: 1 },
+    { cls: 'ch-ms', name: 'MindSignals', color: 'var(--cyan)', scripts: 1 }
+  ];
+
+  let html = '';
+  channels.forEach(ch => {
+    html += '<div class="channel-card ' + ch.cls + '">';
+    html += '<div class="channel-name" style="color:' + ch.color + '">' + ch.name + '</div>';
+    html += '<div class="channel-stat"><span>Скрипты</span><span>' + ch.scripts + '</span></div>';
+    html += '<div class="channel-stat"><span>Смонтировано</span><span>0</span></div>';
+    html += '<div class="channel-stat"><span>Загружено</span><span>0</span></div>';
+    html += '<div class="channel-stat"><span>Прогрев</span></div>';
+    html += warmupDots();
+    html += '</div>';
+  });
+  document.getElementById('channelsGrid').innerHTML = html;
+}
+
+// ==================== TIMELINE ====================
+function renderTimeline(dateStr, dayData) {
+  const tasks = dayData.tasks;
+  const completed = getCompleted(dateStr);
+  const isToday = dateStr === todayStr;
+  const uzNow = getUZDate();
+  const currentMinutes = isToday ? uzNow.getHours() * 60 + uzNow.getMinutes() : -1;
+
+  let html = '';
+  let taskNum = 0;
+  let timeIndicatorInserted = false;
+
+  for (let i = 0; i < tasks.length; i++) {
+    const [time, name, details, tag] = tasks[i];
+    const [startStr, endStr] = time.split('-');
+    const startMin = parseTime(startStr);
+    const endMin = parseTime(endStr);
+
+    // Insert time indicator before this task if needed
+    if (isToday && !timeIndicatorInserted && currentMinutes < endMin) {
+      if (currentMinutes >= startMin || (i === 0 && currentMinutes < startMin)) {
+        html += renderTimeIndicator(currentMinutes);
+        timeIndicatorInserted = true;
+      }
+    }
+
+    if (tag === 'break') {
+      html += '<div class="break-card">' + time + ' &middot; ПЕРЕРЫВ</div>';
+    } else {
+      taskNum++;
+      const isCompleted = completed.includes(i);
+      const isCurrent = isToday && currentMinutes >= startMin && currentMinutes < endMin;
+      let cls = 'task-card';
+      if (isCompleted) cls += ' completed';
+      if (isCurrent && !isCompleted) cls += ' current-task';
+
+      html += '<div class="' + cls + '" onclick="toggleTask(' + i + ',\'' + dateStr + '\')">';
+      html += '<div class="task-number">' + taskNum + '</div>';
+      html += '<div class="task-content">';
+      html += '<div class="task-time">' + time + '</div>';
+      html += '<div class="task-name">' + escHtml(name) + '</div>';
+      if (details) html += '<div class="task-details">' + escHtml(details) + '</div>';
+      html += '</div>';
+      html += '<span class="task-tag tag-' + tag + '">' + (TAG_LABELS[tag] || tag) + '</span>';
+      html += '</div>';
+    }
+
+    // Insert time indicator after last task if we haven't yet
+    if (isToday && !timeIndicatorInserted && i === tasks.length - 1 && currentMinutes >= endMin) {
+      html += renderTimeIndicator(currentMinutes);
+      timeIndicatorInserted = true;
+    }
+  }
+
+  document.getElementById('timeline').innerHTML = html;
+}
+
+function renderTimeIndicator(minutes) {
+  const h = String(Math.floor(minutes / 60)).padStart(2, '0');
+  const m = String(minutes % 60).padStart(2, '0');
+  return '<div class="time-indicator"><div class="time-indicator-dot"></div><div class="time-indicator-line"><span class="time-indicator-label">СЕЙЧАС ' + h + ':' + m + '</span></div></div>';
+}
+
+function parseTime(str) {
+  const parts = str.trim().split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ==================== CURRENT TASK HIGHLIGHT ====================
+function highlightCurrentTask() {
+  if (currentViewDate !== todayStr) return;
+  // Re-render to update current task highlight
+  const dayData = DAYS[currentViewDate];
+  if (dayData) renderTimeline(currentViewDate, dayData);
+}
+
+// ==================== TASK COMPLETION ====================
+function getStorageKey(dateStr) {
+  return 'jarvis_' + dateStr;
+}
+
+function getCompleted(dateStr) {
+  try {
+    const raw = localStorage.getItem(getStorageKey(dateStr));
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function saveCompleted(dateStr, arr) {
+  localStorage.setItem(getStorageKey(dateStr), JSON.stringify(arr));
+}
+
+function toggleTask(index, dateStr) {
+  const completed = getCompleted(dateStr);
+  const pos = completed.indexOf(index);
+  if (pos === -1) {
+    completed.push(index);
+  } else {
+    completed.splice(pos, 1);
+  }
+  saveCompleted(dateStr, completed);
+  updateProgress(dateStr);
+
+  // Re-render timeline to reflect change
+  const dayData = DAYS[dateStr];
+  if (dayData) renderTimeline(dateStr, dayData);
+}
+
+function updateProgress(dateStr) {
+  const dayData = DAYS[dateStr];
+  if (!dayData) return;
+  const totalTasks = dayData.tasks.filter(t => t[3] !== 'break').length;
+  const completed = getCompleted(dateStr);
+  const completedCount = completed.filter(i => dayData.tasks[i] && dayData.tasks[i][3] !== 'break').length;
+
+  document.getElementById('pct').textContent = completedCount + ' / ' + totalTasks;
+  document.getElementById('progress-fill').style.width = (totalTasks > 0 ? (completedCount / totalTasks * 100) : 0) + '%';
+  document.getElementById('statCompleted').textContent = completedCount;
+}
+
+// ==================== START ====================
+init();
+</script>
+
+</body>
+</html>
