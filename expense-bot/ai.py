@@ -1,4 +1,4 @@
-"""Gemini орқали овоз/матндан харажатларни ажратиб олиш."""
+"""Gemini орқали хўжайиннинг овози/матнидан харажат ва Яндекс тушумларини ажратиш."""
 import asyncio
 from typing import Literal, Optional
 
@@ -10,26 +10,30 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-PROMPT = """Сен фаст-фуд нуқтасининг ҳисобчисисан. Фойдаланувчи ўзбек (баъзан рус) тилида
-харажатларни айтади. Овоз ёки матндан ҳар бир харажатни алоҳида қатор қилиб ажрат.
+PROMPT = """Сен фаст-фуд бизнесининг ҳисобчисисан. Хўжайин ўзбек (баъзан рус) тилида
+харажатлар ва тушумларни айтади. Овоз ёки матндан ҳар бирини алоҳида қатор қилиб ажрат.
 
-Категориялар:
-- bozorlik: маҳсулот ва хомашё (помидор, товуқ гўшти, ёғ, нон, лаваш, гўшт, ичимлик, идиш-товоқ, салфетка ва ҳ.к.)
-- ishchilar: ишчиларга тўловлар — ойлик, аванс, "олди", "берилди", прогул/премия. person майдонига ишчи исмини ёз.
-- ijara: нуқта ижараси, шунингдек коммунал (свет, газ, сув) ҳам шу ерга
-- prochee: юқоридагиларга кирмайдиган бошқа ҳамма нарса (таъмир, транспорт, реклама, солиқ ва ҳ.к.)
+expenses — харажатлар. Категориялар:
+- bozorlik: маҳсулот ва хомашё (помидор, товуқ гўшти, ёғ, нон, лаваш, гўшт, ичимлик, идиш, салфетка, пакет ва ҳ.к.)
+- ishchilar: ишчиларга тўловлар — ойлик, аванс, "олди", "берилди", премия. person майдонига ишчи исмини ёз.
+- ijara: нуқта ижараси ва коммунал (свет, газ, сув, чиқинди)
+- prochee: бошқа ҳамма нарса (таъмир, транспорт, такси, реклама, солиқ, банк комиссияси ва ҳ.к.)
+
+yandex — Яндекс Еда/Доставкадан ҳисоб рақамга тушган пул ("Яндексдан 2 миллион тушди"). Бу харажат ЭМАС, тушум.
+Кассадаги кунлик нақд/карта савдони бу ерга ёзма — уни кассирлар алоҳида киритади.
 
 Қоидалар:
-- amount — ҳар доим бутун сўм. "100.000", "100 000", "100 минг", "юз минг" = 100000. "1,5 млн" = 1500000.
-- Агар нарх бир кг/дона учун эмас, умумий сумма деб айтилган бўлса, шуни amount қил. Агар "10кг помидор 100.000 сум" деса — amount=100000 (ҳаммаси учун), quantity="10 кг".
-- item — қисқа, тоза номи, бош ҳарф билан (масалан "Помидор", "Товуқ гўшти"). Ишчи тўловларида item = "Аванс" ёки "Ойлик" ёки "Тўлов".
-- Суммани аниқ эшитмаган ёки айтилмаган бўлсанг, ўйлаб топма — шу қаторни ташлаб юбор.
-- day_offset: "кеча" деса -1, "ўтган кун"/"олдинги куни" -2, акс ҳолда 0.
-- transcript — овозда нима дейилганини айнан ёз.
+- amount — ҳар доим бутун сўм. "100.000", "100 000", "100 минг", "юз минг" = 100000. "1,5 млн" / "бир ярим миллион" = 1500000.
+- "10 кг помидор 100 минг" — amount=100000 (умумий), quantity="10 кг". Агар "килоси 10 минг, 10 кило" деса — amount=100000.
+- item — қисқа, тоза номи, бош ҳарф билан ("Помидор", "Товуқ гўшти"). Ишчи тўловида item = "Аванс", "Ойлик" ёки "Тўлов".
+- Сумма айтилмаган ёки аниқ эшитилмаган бўлса, ўйлаб топма — у қаторни ташла.
+- day_offset: "кеча" деса -1, "олдинги куни"/"ўтган куни" -2, акс ҳолда 0.
+- point: агар қайси точка учунлиги айтилса, қуйидаги рўйхатдан айнан номини ёз, бўлмаса null.
+- transcript — нима дейилганини айнан ёз.
 """
 
 
-class Entry(BaseModel):
+class Expense(BaseModel):
     category: Literal["bozorlik", "ishchilar", "ijara", "prochee"]
     item: str
     quantity: Optional[str] = None
@@ -37,10 +41,24 @@ class Entry(BaseModel):
     person: Optional[str] = None
 
 
+class YandexIncome(BaseModel):
+    amount: int
+    note: Optional[str] = None
+
+
 class Parsed(BaseModel):
     transcript: str
     day_offset: int = 0
-    entries: list[Entry]
+    point: Optional[str] = None
+    expenses: list[Expense] = []
+    yandex: list[YandexIncome] = []
+
+
+def _context(point_names: list[str], employee_names: list[str]) -> str:
+    pts = ", ".join(point_names) or "(битта точка)"
+    emps = ", ".join(employee_names) or "(рўйхат бўш)"
+    return (f"\nТочкалар: {pts}\nИшчилар рўйхати: {emps}\n"
+            "Ишчи исми рўйхатдагига ўхшаса, рўйхатдагидек ёз (масалан 'Ибратга' -> 'Ибрат').\n")
 
 
 def _call(contents) -> Parsed:
@@ -54,14 +72,15 @@ def _call(contents) -> Parsed:
         ),
     )
     if resp.parsed is None:
-        raise ValueError("Gemini жавоби тушунарсиз")
+        raise ValueError(f"Gemini жавоби тушунарсиз: {resp.text!r}")
     return resp.parsed
 
 
-async def parse_voice(audio: bytes, mime: str = "audio/ogg") -> Parsed:
+async def parse_voice(audio: bytes, mime: str, point_names: list[str], employee_names: list[str]) -> Parsed:
     part = types.Part.from_bytes(data=audio, mime_type=mime)
-    return await asyncio.to_thread(_call, [part, PROMPT])
+    return await asyncio.to_thread(_call, [part, PROMPT + _context(point_names, employee_names)])
 
 
-async def parse_text(text: str) -> Parsed:
-    return await asyncio.to_thread(_call, [PROMPT + "\n\nМатн:\n" + text])
+async def parse_text(text: str, point_names: list[str], employee_names: list[str]) -> Parsed:
+    return await asyncio.to_thread(
+        _call, [PROMPT + _context(point_names, employee_names) + "\nМатн:\n" + text])
