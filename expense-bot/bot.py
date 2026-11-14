@@ -34,14 +34,17 @@ som = reports.som
 # ---------- клавиатуралар ----------
 O_TODAY, O_WEEK, O_MONTH = "📅 Бугун", "📆 Ҳафта", "🗓 Ой"
 O_XLSX, O_STAFF, O_ADMIN = "📊 Excel", "👥 Ходимлар", "⚙️ Бошқарув"
-OWNER_KB = ReplyKeyboardMarkup([[O_TODAY, O_WEEK, O_MONTH], [O_XLSX, O_STAFF, O_ADMIN]], resize_keyboard=True)
+B_EXP, B_INC = "💸 Харажат", "💰 Кирим"
+OWNER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC], [O_TODAY, O_WEEK, O_MONTH], [O_XLSX, O_STAFF, O_ADMIN]],
+                               resize_keyboard=True)
+CASHIER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC]], resize_keyboard=True)
 
-C_TODAY, C_YESTERDAY, C_HISTORY = "💵 Бугунги савдо", "📆 Кечаги савдо", "📋 Охирги 7 кун"
-CASHIER_KB = ReplyKeyboardMarkup([[C_TODAY], [C_YESTERDAY, C_HISTORY]], resize_keyboard=True)
+EXP_PROMPT = ("💸 Харажатни <b>овоз</b> ёки <b>матн</b> билан юборинг. Битта хабарда бир нечтасини айтиш мумкин:\n"
+              "<i>«Ибрат 100 минг ўзига олди, 50 минг бензин қуйдим, 10 кило помидор 100 минг»</i>")
 
 OWNER_HELP = """<b>Хўжайин буйруқлари</b>
 
-🎤 <b>Харажат</b> — овоз ёки матн юборинг:
+💸 <b>Харажат</b> — тугмани босинг ёки тўғридан-тўғри овоз/матн юборинг:
 <i>«10 кг помидор 100 минг, товуқ гўшти 10 кг 350 минг, Ибрат 100 минг олди»</i>
 <i>«Яндексдан 2 миллион 400 минг тушди»</i> — Яндекс тушуми
 
@@ -64,17 +67,19 @@ OWNER_HELP = """<b>Хўжайин буйруқлари</b>
 
 💰 <b>Пул</b>
 /yandex Сумма [изоҳ] — Яндекс тушуми (/yandex 2400000 3-9 ноябрь)
-/savdo Нақд Карта — кассир ўрнига савдо киритиш (/savdo kecha 2500000 1800000)
+💰 <b>Кирим</b> тугмаси — точка кунлик кирими (нақд/карта)
+/savdo Нақд Карта — тезкор кирим (/savdo kecha 2500000 1800000)
 
 ✏️ <b>Тузатиш</b>
 /oxirgi — охирги ёзувлар
 /ochir № — харажатни ўчириш
 /yandex_ochir № — Яндекс ёзувини ўчириш"""
 
-CASHIER_HELP = ("Салом! Сиз <b>{point}</b> кассирисиз.\n\n"
-                "Ҳар куни иш тугагач «💵 Бугунги савдо» ни босинг ва нақд ҳамда картага "
-                "тушган суммани ёзинг. Хато ёзсангиз — қайта босиб, тўғрисини ёзинг, эскиси алмашади.\n"
-                "Кечаси 05:00 гача киритилган савдо олдинги кунга ёзилади.")
+CASHIER_HELP = ("Салом! Сиз <b>{point}</b> ходимисиз.\n\n"
+                "💸 <b>Харажат</b> — пул чиқса (бозорлик, аванс, бензин…) овоз ёки матн билан ёзинг.\n"
+                "💰 <b>Кирим</b> — смена охирида нақд ва картага тушган суммани ёзинг. "
+                "Хато ёзсангиз, қайта киритинг — эскиси алмашади.\n"
+                "Кечаси 05:00 гача киритилган кирим олдинги кунга ёзилади.")
 
 
 # ---------- ёрдамчилар ----------
@@ -381,12 +386,16 @@ async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
             if emp:
                 d["employee_id"], d["person"] = emp["id"], emp["name"]
         expenses.append(d)
-    yandex = [y.model_dump() for y in parsed.yandex if y.amount > 0]
+    yandex = [y.model_dump() for y in parsed.yandex if y.amount > 0] if u["role"] == "owner" else []
     if not expenses and not yandex:
         return await message.reply_text("Сумма топилмади. Нарсаси ва суммаси билан қайта айтинг.")
     offset = max(-7, min(0, parsed.day_offset))
     item = dict(type="exp", day=(business_today() + timedelta(days=offset)).isoformat(),
                 transcript=parsed.transcript, expenses=expenses, yandex=yandex, by=u["tg_id"])
+    if u["role"] == "cashier":
+        item["point"] = u["point_id"]
+        key = stash(ctx, item)
+        return await message.reply_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
     await ask_point_or_confirm(message, ctx, item, parsed.point)
 
 
@@ -394,7 +403,7 @@ def ai_context():
     return [p["name"] for p in db.points()], [e["name"] for e in db.employees()]
 
 
-async def owner_voice(update: Update, ctx, u):
+async def expense_voice(update: Update, ctx, u):
     msg = update.message
     media = msg.voice or msg.audio
     if media.duration and media.duration > 300:
@@ -412,7 +421,7 @@ async def owner_voice(update: Update, ctx, u):
     await handle_parsed(msg, ctx, u, parsed)
 
 
-async def owner_text(update: Update, ctx, u, text: str):
+async def expense_text(update: Update, ctx, u, text: str):
     await update.message.chat.send_action("typing")
     try:
         parsed = await ai.parse_text(text, *ai_context())
@@ -561,26 +570,30 @@ def sale_preview(item: dict) -> str:
     return "\n".join(lines)
 
 
-async def cashier_start_sale(update: Update, ctx, u, day: date):
-    ctx.user_data["sale"] = dict(day=day.isoformat(), step="cash")
-    await update.message.reply_text(f"📅 {day:%d.%m.%Y}\n💵 Нақд қанча тушди? (масалан: 2 500 000)\n\nБекор қилиш: /bekor")
+def yesterday_kb():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("📆 Кечаги кун учун", callback_data="ky")]])
 
 
-async def cashier_text(update: Update, ctx, u, text: str):
-    if text == C_TODAY:
-        return await cashier_start_sale(update, ctx, u, business_today())
-    if text == C_YESTERDAY:
-        return await cashier_start_sale(update, ctx, u, business_today() - timedelta(days=1))
-    if text == C_HISTORY:
-        rows = db.sales_of_point(u["point_id"], 7)
-        if not rows:
-            return await update.message.reply_text("Ҳали ёзув йўқ.")
-        lines = [f"{r['day'][8:]}.{r['day'][5:7]}  нақд {som(r['cash'])} | карта {som(r['card'])}" for r in rows]
-        return await update.message.reply_text("\n".join(lines))
+async def start_income(message, ctx, u, point_id, day: date):
+    ctx.user_data["sale"] = dict(day=day.isoformat(), step="cash", point=point_id)
+    await message.reply_text(
+        f"💰 Кирим — 🏪 {escape(db.point_name(point_id))}, 📅 {day:%d.%m.%Y}\n\n"
+        "💵 Нақд қанча тушди? (масалан: 2 500 000)\n\nБекор қилиш: /bekor",
+        parse_mode=HTML, reply_markup=yesterday_kb() if day == business_today() else None)
 
-    st = ctx.user_data.get("sale")
-    if not st:
-        return await update.message.reply_text("Савдо киритиш учун «💵 Бугунги савдо» ни босинг.", reply_markup=CASHIER_KB)
+
+async def income_button(update: Update, ctx, u):
+    if u["role"] == "cashier":
+        return await start_income(update.message, ctx, u, u["point_id"], business_today())
+    pts = db.points()
+    if not pts:
+        return await update.message.reply_text("Аввал точка қўшинг: /nuqta_qosh Номи")
+    if len(pts) == 1:
+        return await start_income(update.message, ctx, u, pts[0]["id"], business_today())
+    await update.message.reply_text("💰 Қайси точка кирими?", reply_markup=points_kb("kp"))
+
+
+async def income_step(update: Update, ctx, u, st: dict, text: str):
     amount = reports.parse_amount(text)
     if amount is None:
         return await update.message.reply_text("Фақат рақам ёзинг, масалан: 2 500 000  (бекор: /bekor)")
@@ -588,7 +601,7 @@ async def cashier_text(update: Update, ctx, u, text: str):
         st.update(cash=amount, step="card")
         return await update.message.reply_text("💳 Картага (терминал/Click/Payme) қанча тушди?")
     ctx.user_data.pop("sale", None)
-    item = dict(type="sale", day=st["day"], point=u["point_id"], cash=st["cash"], card=amount, by=u["tg_id"])
+    item = dict(type="sale", day=st["day"], point=st["point"], cash=st["cash"], card=amount, by=u["tg_id"])
     key = stash(ctx, item)
     await update.message.reply_text(sale_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
 
@@ -604,16 +617,20 @@ async def save_sale(ctx, item: dict):
     db.audit(item["by"], "sale", f"{item['point']} {item['day']} {item['cash']} {item['card']}")
     if NOTIFY_OWNERS_ON_SALES:
         by = db.get_user(item["by"])
-        text = (f"🧾 {escape(db.point_name(item['point']))}, {day:%d.%m}: нақд {som(item['cash'])}, "
+        text = (f"💰 Кирим: {escape(db.point_name(item['point']))}, {day:%d.%m}: нақд {som(item['cash'])}, "
                 f"карта {som(item['card'])}, жами <b>{som(item['cash'] + item['card'])}</b>"
                 f"\n<i>киритди: {escape((by['name'] if by else None) or str(item['by']))}</i>")
-        for oid in db.owner_ids():
-            if oid == item["by"]:
-                continue
-            try:
-                await ctx.bot.send_message(oid, text, parse_mode=HTML)
-            except Exception:
-                log.warning("owner %s notify failed", oid)
+        await notify_owners(ctx, text, skip=item["by"])
+
+
+async def notify_owners(ctx, text: str, skip=None):
+    for oid in db.owner_ids():
+        if oid == skip:
+            continue
+        try:
+            await ctx.bot.send_message(oid, text, parse_mode=HTML)
+        except Exception:
+            log.warning("owner %s notify failed", oid)
 
 
 # ---------- умумий хабар маршрутлари ----------
@@ -622,9 +639,8 @@ async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     u = current_user(update)
     if not u:
         return await deny(update)
-    if u["role"] != "owner":
-        return await update.message.reply_text("Рақамни ёзиб юборинг 🙂 Овоз фақат хўжайинлар учун.")
-    await owner_voice(update, ctx, u)
+    ctx.user_data.pop("sale", None)
+    await expense_voice(update, ctx, u)
 
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -632,8 +648,20 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     text = update.message.text.strip()
+    if text == B_EXP:
+        ctx.user_data.pop("sale", None)
+        return await update.message.reply_text(EXP_PROMPT, parse_mode=HTML)
+    if text == B_INC:
+        ctx.user_data.pop("sale", None)
+        return await income_button(update, ctx, u)
+    st = ctx.user_data.get("sale")
+    if st:
+        return await income_step(update, ctx, u, st, text)
     if u["role"] == "cashier":
-        return await cashier_text(update, ctx, u, text)
+        if reports.parse_amount(text) is not None:
+            return await update.message.reply_text(
+                "Кирим ёзиш учун «💰 Кирим» ни, харажат учун «💸 Харажат» ни босинг.", reply_markup=CASHIER_KB)
+        return await expense_text(update, ctx, u, text)
 
     ref = business_today()
     if text == O_TODAY:
@@ -648,7 +676,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await staff_cmd(update, ctx)
     if text == O_ADMIN:
         return await update.message.reply_text(OWNER_HELP, parse_mode=HTML)
-    await owner_text(update, ctx, u, text)
+    await expense_text(update, ctx, u, text)
 
 
 async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -675,6 +703,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 db.add_yandex(day, item["point"], y["amount"], y.get("note"), u["tg_id"])
             suffix = f"\n\n✅ Сақланди" + (f" (№{ids[0]}–{ids[-1]})" if ids else "")
             await q.edit_message_text(exp_preview(item) + suffix, parse_mode=HTML)
+            if u["role"] == "cashier" and NOTIFY_OWNERS_ON_SALES:
+                note = f"💸 <b>{escape(u['name'] or str(u['tg_id']))}</b> харажат ёзди:\n" + exp_preview(item)
+                await notify_owners(ctx, note, skip=u["tg_id"])
         elif item["type"] == "sale":
             text = sale_preview(item)
             await save_sale(ctx, item)
@@ -695,8 +726,21 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         preview = exp_preview(item) if item["type"] == "exp" else sale_preview(item)
         return await q.edit_message_text(preview, parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
 
+    if action == "ky":  # кирим: кечаги кун учун
+        st = ctx.user_data.get("sale")
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not st:
+            return
+        return await start_income(q.message, ctx, u, st["point"], business_today() - timedelta(days=1))
+
     if u["role"] != "owner":
         return await q.answer("Рухсат йўқ", show_alert=True)
+
+    if action == "kp":  # kp:<point_id> — хўжайин кирим учун точка танлади
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        return await start_income(q.message, ctx, u, int(parts[1]), business_today())
 
     if action == "inv":  # inv:<point_id>
         await q.answer()
@@ -727,7 +771,7 @@ async def job_sales_reminder(ctx: ContextTypes.DEFAULT_TYPE):
             continue
         for cid in db.cashiers_of(p["id"]):
             try:
-                await ctx.bot.send_message(cid, f"⏰ Бугунги ({day:%d.%m}) савдони киритишни унутманг: «💵 Бугунги савдо»")
+                await ctx.bot.send_message(cid, f"⏰ Бугунги ({day:%d.%m}) киримни ёзишни унутманг: «💰 Кирим»")
             except Exception:
                 log.warning("cashier %s reminder failed", cid)
 

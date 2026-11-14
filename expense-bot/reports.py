@@ -199,6 +199,7 @@ def detail_block(d: Data) -> str:
         for r in d.yandex:
             lines.append(line(f"Яндекс ({db.point_name(r['point_id'])})", r["amount"]))
         parts.append("<b>Тушум</b>\n" + pre(lines))
+    names = db.user_names()
     for key, name in CATEGORIES.items():
         rows = [r for r in d.expenses if r["category"] == key]
         if not rows:
@@ -209,6 +210,9 @@ def detail_block(d: Data) -> str:
             if r["quantity"]:
                 label += f" {r['quantity']}"
             lines.append(line(f"#{r['id']} {label}", r["amount"]))
+            who = names.get(r["created_by"])
+            if who and who[1] == "cashier":
+                lines.append(f"   ✍ {who[0]}"[:W])
         lines.append(line("Жами", sum(r["amount"] for r in rows)))
         parts.append(f"<b>{name}</b>\n" + pre(lines))
     return "\n".join(parts)
@@ -338,17 +342,20 @@ def excel_report(start: date, end: date, path: str) -> str:
                 d.income - d.spent])
 
     # 3. Савдо (кассирлар)
-    ws3 = wb.create_sheet("Савдо")
-    ws3.append(["Сана", "Точка", "Нақд", "Карта", "Жами"])
+    ws3 = wb.create_sheet("Кирим")
+    ws3.append(["Сана", "Точка", "Нақд", "Карта", "Жами", "Ким ёзди"])
     for r in d.sales:
-        ws3.append([r["day"], pts.get(r["point_id"], "?"), r["cash"], r["card"], r["cash"] + r["card"]])
+        ws3.append([r["day"], pts.get(r["point_id"], "?"), r["cash"], r["card"], r["cash"] + r["card"],
+                    db.user_names().get(r["created_by"], ("?",))[0]])
 
     # 4. Харажатлар
     ws4 = wb.create_sheet("Харажатлар")
-    ws4.append(["№", "Сана", "Точка", "Категория", "Номи", "Миқдор", "Ишчи", "Сумма"])
+    names = db.user_names()
+    ws4.append(["№", "Сана", "Точка", "Категория", "Номи", "Миқдор", "Ишчи", "Сумма", "Ким ёзди"])
     for r in d.expenses:
         ws4.append([r["id"], r["day"], pts.get(r["point_id"], "Умумий"), CATEGORIES[r["category"]],
-                    r["item"], r["quantity"], r["person"], r["amount"]])
+                    r["item"], r["quantity"], r["person"], r["amount"],
+                    names.get(r["created_by"], ("?",))[0]])
 
     # 5. Яндекс
     ws5 = wb.create_sheet("Яндекс")

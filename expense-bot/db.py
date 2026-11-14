@@ -349,3 +349,9 @@ def ensure_owner(tg_id: int):
 def set_user_name(tg_id: int, name: str):
     with conn() as c:
         c.execute("UPDATE users SET name=? WHERE tg_id=?", (name, tg_id))
+
+
+def user_names() -> dict[int, tuple[str, str]]:
+    """tg_id -> (исм, роль)"""
+    with conn() as c:
+        return {r["tg_id"]: (r["name"] or str(r["tg_id"]), r["role"]) for r in c.execute("SELECT * FROM users")}
