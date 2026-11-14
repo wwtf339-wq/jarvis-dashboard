@@ -6,9 +6,14 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-from config import GEMINI_API_KEY, GEMINI_MODEL
+import logging
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+from config import GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL
+
+log = logging.getLogger("expense-bot.ai")
+# 45 сония кутиб, жавоб бўлмаса кейинги моделга ўтади
+client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=45_000))
+MODELS = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
 
 PROMPT = """Сен фаст-фуд бизнесининг ҳисобчисисан. Хўжайин ўзбек (баъзан рус) тилида
 харажатлар ва тушумларни айтади. Овоз ёки матндан ҳар бирини алоҳида қатор қилиб ажрат.
@@ -62,18 +67,25 @@ def _context(point_names: list[str], employee_names: list[str]) -> str:
 
 
 def _call(contents) -> Parsed:
-    resp = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=Parsed,
-            temperature=0,
-        ),
-    )
-    if resp.parsed is None:
-        raise ValueError(f"Gemini жавоби тушунарсиз: {resp.text!r}")
-    return resp.parsed
+    last_err = None
+    for model in MODELS:
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=Parsed,
+                    temperature=0,
+                ),
+            )
+            if resp.parsed is None:
+                raise ValueError(f"тушунарсиз жавоб: {resp.text!r}")
+            return resp.parsed
+        except Exception as e:  # банд, лимит, timeout — кейинги модел
+            log.warning("Gemini %s failed: %s", model, str(e)[:200])
+            last_err = e
+    raise RuntimeError(f"Ҳамма Gemini моделлари хато берди: {last_err}")
 
 
 async def parse_voice(audio: bytes, mime: str, point_names: list[str], employee_names: list[str]) -> Parsed:

@@ -20,9 +20,11 @@ def _time(name: str, default: str) -> tuple[int, int]:
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-# "gemini-flash-latest" — Google ўзи энг янги Flash моделига улаб туради.
-# Аниқ версияда қотириш учун AI Studio'даги рўйхатдан номини ёзинг.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+# Асосий модел. AI Studio'даги рўйхатдан исталган Flash моделини ёзиш мумкин.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+# Асосий модел банд бўлса (503/429) ёки жавоб бермаса, навбат билан шулар синаб кўрилади
+GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_FALLBACK_MODELS", "gemini-flash-latest,gemini-2.5-flash").split(",") if m.strip()]
 
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent"))
 DB_PATH = os.getenv("DB_PATH", "expenses.db")
