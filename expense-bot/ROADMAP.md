@@ -94,25 +94,45 @@ Agar Gemini xato bersa, ko'pincha kalit noto'g'ri yoki model nomi eskirgan bo'la
 Server olinadi, kodni `/opt/expense-bot` ga tashlanadi, `.venv` o'rnatiladi, keyin `expense-bot.service` fayli bilan systemd orqali doimiy ishga tushiriladi. Buyruqlari faylning ichida yozilgan.
 
 **V) Bepul: Google Cloud e2-micro (doimiy bepul tarif)**
-1. https://cloud.google.com/free → ro'yxatdan o'tish. Visa/Mastercard karta so'raladi (Humo/Uzcard o'tmaydi), lekin bepul limitda pul yechilmaydi.
-2. Compute Engine → **Create instance**:
-   - Region: `us-central1`, `us-west1` yoki `us-east1` (faqat shular bepul)
+
+*1-qadam. Hisob ochish (10 daqiqa)*
+1. https://cloud.google.com/free → **Get started for free**. Gmail bilan kiring.
+2. Visa/Mastercard karta so'raladi (Humo/Uzcard o'tmaydi). Tekshirish uchun $0–1 bloklanib, qaytariladi.
+3. Sizga 90 kunlik $300 sinov krediti beriladi. **Muhim:** 90 kun tugaganda Google "Upgrade" (to'liq hisobga o'tish) so'raydi. Upgrade qilmasangiz, server to'xtatiladi. Upgrade qilganda ham e2-micro bepul limitda qoladi, pul yechilmaydi.
+
+*2-qadam. Server yaratish (5 daqiqa)*
+1. Menyu → **Compute Engine → VM instances** → **Enable API** (birinchi marta 1–2 daqiqa) → **Create instance**.
+2. Sozlamalar:
+   - Name: `expense-bot`
+   - Region: **us-central1** (yoki `us-west1`, `us-east1`; faqat shular bepul)
    - Machine type: **e2-micro**
-   - Boot disk: Ubuntu, **Standard persistent disk**, 30 GB gacha
-   - Statik IP **olmang** (pulli). Bot tashqi IP'siz ham ishlaydi.
-3. Brauzerdagi **SSH** tugmasi orqali serverga kirib:
+   - Boot disk → **Change**: Ubuntu 24.04 LTS, disk turi **Standard persistent disk**, hajmi **30 GB**
+   - Qolganiga tegmang. Statik IP **olmang** (pulli).
+3. **Create** → 1 daqiqada server tayyor.
+
+*3-qadam. Botni o'rnatish (5 daqiqa)*
+1. Server qatoridagi **SSH** tugmasini bosing, brauzerda qora oyna ochiladi.
+2. Shu ikki buyruqni kiriting:
    ```bash
-   sudo apt update && sudo apt install -y git python3-venv
-   sudo git clone https://github.com/wwtf339-wq/jarvis-dashboard.git /opt/src
-   cd /opt/src && sudo git checkout claude/telegram-expense-tracking-bot-kmd0y7
-   sudo cp -r /opt/src/expense-bot /opt/expense-bot && cd /opt/expense-bot
-   sudo python3 -m venv .venv && sudo .venv/bin/pip install -r requirements.txt
-   sudo cp .env.example .env && sudo nano .env      # 3 ta qatorni to'ldiring
-   sudo cp expense-bot.service /etc/systemd/system/
-   sudo systemctl enable --now expense-bot
-   sudo systemctl status expense-bot                # "active (running)" bo'lishi kerak
+   wget -qO setup.sh https://raw.githubusercontent.com/wwtf339-wq/jarvis-dashboard/claude/telegram-expense-tracking-bot-kmd0y7/expense-bot/deploy_gcp.sh
+   sudo bash setup.sh
    ```
-4. Billing → **Budgets & alerts** da $1 lik ogohlantirish qo'ying: tasodifan pul yechila boshlasa, xat keladi.
+3. Skript 3 ta narsani so'raydi: bot tokeni, Gemini kaliti, xo'jayin Telegram ID. Kiriting.
+4. Oxirida `TAYYOR: bot ishlayapti` chiqadi. Telegram'da `/start` bosing.
+
+*4-qadam. Xavfsizlik uchun (2 daqiqa)*
+- Menyu → **Billing → Budgets & alerts** → $1 lik budjet qo'ying. Tasodifan pul yechila boshlasa, emailga xat keladi.
+
+*Keyinchalik kerak bo'ladigan buyruqlar (SSH oynasida):*
+| Nima kerak | Buyruq |
+|---|---|
+| Bot ishlayaptimi? | `sudo systemctl status expense-bot` |
+| Loglar (xatolar) | `sudo journalctl -u expense-bot -f` |
+| Kalitni almashtirish | `sudo nano /opt/expense-bot/.env` → saqlash (Ctrl+O, Enter, Ctrl+X) → `sudo systemctl restart expense-bot` |
+| Kodni yangilash | yuqoridagi ikki buyruqni qayta bering (`.env` va baza saqlanadi) |
+| Bazani yuklab olish | SSH oynasi o'ng yuqorisida ⚙️ → **Download file** → `/opt/expense-bot/expenses.db` |
+
+Bot server o'chib-yonsa ham o'zi qayta ishga tushadi. Har yakshanba baza nusxasi asosiy xo'jayinga Telegram'da keladi.
 
 **G) Bepul, kartasiz: eski Android telefon**
 Termux ilovasini (F-Droid'dan) o'rnatib, o'sha buyruqlar bilan `python bot.py` ni ishga tushirasiz. Telefon doim zaryadda va internetda turishi kerak. Bu eng oddiy yo'l, lekin tok yoki internet o'chsa, bot ham to'xtaydi.
