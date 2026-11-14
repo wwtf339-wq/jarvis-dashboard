@@ -92,6 +92,30 @@ python bot.py
 **Б) Арзон VPS (Linux сервер)**
 Сервер олинади, кодни `/opt/expense-bot` га ташланади, `.venv` ўрнатилади, кейин `expense-bot.service` файли билан systemd орқали доимий ишга туширилади. Буйруқлари файлнинг ичида ёзилган.
 
+**В) Бепул: Google Cloud e2-micro (доимий бепул тариф)**
+1. https://cloud.google.com/free → рўйхатдан ўтиш. Visa/Mastercard карта сўралади (Humo/Uzcard ўтмайди), лекин бепул лимитда пул ечилмайди.
+2. Compute Engine → **Create instance**:
+   - Region: `us-central1`, `us-west1` ёки `us-east1` (фақат шулар бепул)
+   - Machine type: **e2-micro**
+   - Boot disk: Ubuntu, **Standard persistent disk**, 30 GB гача
+   - Статик IP **олманг** (пулли). Бот ташқи IP'сиз ҳам ишлайди.
+3. Браузердаги **SSH** тугмаси орқали серверга кириб:
+   ```bash
+   sudo apt update && sudo apt install -y git python3-venv
+   sudo git clone https://github.com/wwtf339-wq/jarvis-dashboard.git /opt/src
+   cd /opt/src && sudo git checkout claude/telegram-expense-tracking-bot-kmd0y7
+   sudo cp -r /opt/src/expense-bot /opt/expense-bot && cd /opt/expense-bot
+   sudo python3 -m venv .venv && sudo .venv/bin/pip install -r requirements.txt
+   sudo cp .env.example .env && sudo nano .env      # 3 та қаторни тўлдиринг
+   sudo cp expense-bot.service /etc/systemd/system/
+   sudo systemctl enable --now expense-bot
+   sudo systemctl status expense-bot                # "active (running)" бўлиши керак
+   ```
+4. Billing → **Budgets & alerts** да $1 лик огоҳлантириш қўйинг: тасодифан пул ечила бошласа, хат келади.
+
+**Г) Бепул, картасиз: эски Android телефон**
+Termux иловасини (F-Droid'дан) ўрнатиб, ўша буйруқлар билан `python bot.py` ни ишга туширасиз. Телефон доим зарядда ва интернетда туриши керак. Бу энг оддий йўл, лекин ток ёки интернет ўчса, бот ҳам тўхтайди.
+
 > Иккала ҳолатда ҳам бот **бир жойда** ишлаши керак. Компьютерда ва серверда бир вақтда ёқилса, Telegram хато беради.
 
 ---
