@@ -1,4 +1,4 @@
-"""Ҳисоботлар: Telegram учун матн (телефон экранига мос) ва Excel файл."""
+"""Hisobotlar: Telegram uchun matn (telefon ekraniga mos) va Excel fayl."""
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -12,9 +12,9 @@ from openpyxl.utils import get_column_letter
 import db
 from config import CATEGORIES, business_today
 
-MONTHS = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль",
-          "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
-W = 30  # <pre> блок кенглиги (телефонда синмаслиги учун)
+MONTHS = ["", "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul",
+          "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"]
+W = 30  # <pre> blok kengligi (telefonda sinmasligi uchun)
 
 
 def som(n: int) -> str:
@@ -22,8 +22,8 @@ def som(n: int) -> str:
 
 
 def k(n: int) -> str:
-    """Қисқа кўриниш: 1 250 000 -> 1 250к"""
-    return f"{som(round(n / 1000))}к" if n else "-"
+    """Qisqa ko'rinish: 1 250 000 -> 1 250k"""
+    return f"{som(round(n / 1000))}k" if n else "-"
 
 
 def line(label: str, amount: int) -> str:
@@ -36,11 +36,14 @@ def pre(lines: list[str]) -> str:
 
 
 def parse_amount(text: str) -> int | None:
-    """'2 500 000', '2.500.000', '2,5 млн', '2500к', '800 минг' -> бутун сўм."""
-    t = text.lower().replace("сўм", "").replace("сум", "").replace("so'm", "").replace("som", "").strip()
+    """'2 500 000', '2.500.000', '2,5 mln', '2500k', '800 ming' (lotin yoki kirill) -> butun so'm."""
+    t = text.lower()
+    for w in ("so'm", "so‘m", "som", "sum", "сўм", "сум"):
+        t = t.replace(w, "")
+    t = t.strip()
     mult = 1
-    for word, m in (("млн", 1_000_000), ("миллион", 1_000_000), ("mln", 1_000_000),
-                    ("минг", 1000), ("ming", 1000), ("к", 1000), ("k", 1000)):
+    for word, m in (("million", 1_000_000), ("миллион", 1_000_000), ("mln", 1_000_000), ("млн", 1_000_000),
+                    ("ming", 1000), ("минг", 1000), ("k", 1000), ("к", 1000)):
         if t.endswith(word):
             mult, t = m, t[: -len(word)].strip()
             break
@@ -55,7 +58,7 @@ def parse_amount(text: str) -> int | None:
     return int(t) if re.fullmatch(r"\d+", t) else None
 
 
-# ---------- даврлар ----------
+# ---------- davrlar ----------
 
 def month_range(year: int, month: int) -> tuple[date, date]:
     start = date(year, month, 1)
@@ -65,21 +68,21 @@ def month_range(year: int, month: int) -> tuple[date, date]:
 
 def period_range(kind: str, ref: date) -> tuple[date, date, str]:
     if kind == "bugun":
-        return ref, ref, f"Бугун, {ref:%d.%m.%Y}"
+        return ref, ref, f"Bugun, {ref:%d.%m.%Y}"
     if kind == "kecha":
         d = ref - timedelta(days=1)
-        return d, d, f"Кеча, {d:%d.%m.%Y}"
+        return d, d, f"Kecha, {d:%d.%m.%Y}"
     if kind == "hafta":
         s = ref - timedelta(days=ref.weekday())
         e = s + timedelta(days=6)
-        return s, e, f"Ҳафта {s:%d.%m} – {e:%d.%m.%Y}"
+        return s, e, f"Hafta {s:%d.%m} – {e:%d.%m.%Y}"
     if kind == "oy":
         s, e = month_range(ref.year, ref.month)
         return s, e, f"{MONTHS[ref.month]} {ref.year}"
     raise ValueError(kind)
 
 
-# ---------- маълумот йиғиш ----------
+# ---------- ma'lumot yig'ish ----------
 
 @dataclass
 class Data:
@@ -115,19 +118,19 @@ def collect(start: date, end: date, point_id=None) -> Data:
                 db.yandex_between(start, end, point_id))
 
 
-# ---------- матн блоклари ----------
+# ---------- matn bloklari ----------
 
 def pnl_block(d: Data) -> str:
     cats = d.by_cat()
-    lines = ["ТУШУМ",
-             line("  Нақд", d.cash), line("  Карта", d.card), line("  Яндекс", d.ya),
-             line("  Жами тушум", d.income), "",
-             "ХАРАЖАТ"]
+    lines = ["TUSHUM",
+             line("  Naqd", d.cash), line("  Karta", d.card), line("  Yandex", d.ya),
+             line("  Jami tushum", d.income), "",
+             "XARAJAT"]
     for key, name in CATEGORIES.items():
         lines.append(line(f"  {name}", cats.get(key, 0)))
-    lines += [line("  Жами харажат", d.spent), "-" * W]
+    lines += [line("  Jami xarajat", d.spent), "-" * W]
     profit = d.income - d.spent
-    lines.append(line("ФОЙДА" if profit >= 0 else "ЗАРАР", profit))
+    lines.append(line("FOYDA" if profit >= 0 else "ZARAR", profit))
     return pre(lines)
 
 
@@ -140,20 +143,20 @@ def per_point_block(d: Data) -> str | None:
         inc = sum(r["cash"] + r["card"] for r in d.sales if r["point_id"] == p["id"]) \
             + sum(r["amount"] for r in d.yandex if r["point_id"] == p["id"])
         exp = sum(r["amount"] for r in d.expenses if r["point_id"] == p["id"])
-        lines += [p["name"][:W], line("  тушум", inc), line("  харажат", exp), line("  фарқ", inc - exp)]
+        lines += [p["name"][:W], line("  tushum", inc), line("  xarajat", exp), line("  farq", inc - exp)]
     general = sum(r["amount"] for r in d.expenses if r["point_id"] is None)
     general_ya = sum(r["amount"] for r in d.yandex if r["point_id"] is None)
     if general or general_ya:
-        lines += ["Умумий (точкага бўлинмаган)"]
+        lines += ["Umumiy (tochkaga bo'linmagan)"]
         if general_ya:
-            lines.append(line("  Яндекс", general_ya))
+            lines.append(line("  Yandex", general_ya))
         if general:
-            lines.append(line("  харажат", general))
-    return "<b>Точкалар кесимида</b>\n" + pre(lines)
+            lines.append(line("  xarajat", general))
+    return "<b>Tochkalar kesimida</b>\n" + pre(lines)
 
 
 def missing_sales(d: Data) -> list[str]:
-    """Кассир савдо киритмаган кунлар (бугунги очиқ кун ҳисобга олинмайди)."""
+    """Kassir savdo kiritmagan kunlar (bugungi ochiq kun hisobga olinmaydi)."""
     last = min(d.end, business_today() - timedelta(days=1))
     have = {(r["point_id"], r["day"]) for r in d.sales}
     pts = db.points() if d.point_id is None else [p for p in db.points() if p["id"] == d.point_id]
@@ -168,7 +171,7 @@ def missing_sales(d: Data) -> list[str]:
                 miss.append(f"{day:%d.%m}")
             day += timedelta(days=1)
         if miss:
-            out.append(f"⚠️ {escape(p['name'])}: {', '.join(miss)} — савдо киритилмаган")
+            out.append(f"⚠️ {escape(p['name'])}: {', '.join(miss)} — savdo kiritilmagan")
     return out
 
 
@@ -181,24 +184,24 @@ def daily_block(d: Data) -> str:
     for r in d.expenses:
         exp[r["day"]] += r["amount"]
     days = sorted(set(inc) | set(exp))
-    lines = [f"{'Сана':<6}{'Тушум':>8}{'Харажат':>8}{'Фарқ':>8}"]
+    lines = [f"{'Sana':<6}{'Tushum':>8}{'Xarajat':>8}{'Farq':>8}"]
     for day in days:
         diff = inc[day] - exp[day]
         sign = "+" if diff > 0 else ""
         lines.append(f"{day[8:]}.{day[5:7]} {k(inc[day]):>7} {k(exp[day]):>7} {sign + k(diff) if diff else '0':>7}")
-    return pre(lines) + "\n<i>к = минг сўм</i>"
+    return pre(lines) + "\n<i>k = ming so'm</i>"
 
 
 def detail_block(d: Data) -> str:
-    """Кунлик батафсил: ҳар бир точка савдоси ва ҳар бир харажат қатори."""
+    """Kunlik batafsil: har bir tochka savdosi va har bir xarajat qatori."""
     parts = []
     if d.sales or d.yandex:
         lines = []
         for r in d.sales:
-            lines += [db.point_name(r["point_id"])[:W], line("  нақд", r["cash"]), line("  карта", r["card"])]
+            lines += [db.point_name(r["point_id"])[:W], line("  naqd", r["cash"]), line("  karta", r["card"])]
         for r in d.yandex:
-            lines.append(line(f"Яндекс ({db.point_name(r['point_id'])})", r["amount"]))
-        parts.append("<b>Тушум</b>\n" + pre(lines))
+            lines.append(line(f"Yandex ({db.point_name(r['point_id'])})", r["amount"]))
+        parts.append("<b>Tushum</b>\n" + pre(lines))
     names = db.user_names()
     for key, name in CATEGORIES.items():
         rows = [r for r in d.expenses if r["category"] == key]
@@ -213,13 +216,13 @@ def detail_block(d: Data) -> str:
             who = names.get(r["created_by"])
             if who and who[1] == "cashier":
                 lines.append(f"   ✍ {who[0]}"[:W])
-        lines.append(line("Жами", sum(r["amount"] for r in rows)))
+        lines.append(line("Jami", sum(r["amount"] for r in rows)))
         parts.append(f"<b>{name}</b>\n" + pre(lines))
     return "\n".join(parts)
 
 
 def employee_payments(start: date, end: date) -> list[dict]:
-    """Ҳар бир ходим: ойлиги, шу даврда олгани, қолдиқ."""
+    """Har bir xodim: oyligi, shu davrda olgani, qoldiq."""
     paid_by_id, paid_by_name = defaultdict(int), defaultdict(int)
     for r in db.expenses_between(start, end):
         if r["category"] != "ishchilar":
@@ -235,7 +238,7 @@ def employee_payments(start: date, end: date) -> list[dict]:
         paid = paid_by_id.pop(e["id"], 0) + paid_by_name.pop(e["name"].lower(), 0)
         out.append(dict(name=e["name"], point=db.point_name(e["point_id"]), salary=e["salary"],
                         paid=paid, left=e["salary"] - paid, active=bool(e["active"])))
-    for name, paid in paid_by_name.items():  # рўйхатда йўқ исмлар
+    for name, paid in paid_by_name.items():  # ro'yxatda yo'q ismlar
         out.append(dict(name=name.title(), point="?", salary=0, paid=paid, left=-paid, active=True))
     return out
 
@@ -246,21 +249,21 @@ def salary_block(start: date, end: date) -> str | None:
         return None
     lines = []
     for r in rows:
-        tag = " (бўшаган)" if not r["active"] else (" (рўйхатда йўқ)" if r["point"] == "?" else "")
+        tag = " (bo'shagan)" if not r["active"] else (" (ro'yxatda yo'q)" if r["point"] == "?" else "")
         lines.append((r["name"] + tag)[:W])
-        lines.append(f"  {k(r['salary'])} ойлик, {k(r['paid'])} олди")
+        lines.append(f"  {k(r['salary'])} oylik, {k(r['paid'])} oldi")
         if r["salary"]:
-            lines.append(f"  қолди: {k(r['left'])}" if r["left"] >= 0 else f"  ортиқча: {k(-r['left'])}")
-    return "<b>Ишчилар ойлиги</b>\n" + pre(lines)
+            lines.append(f"  qoldi: {k(r['left'])}" if r["left"] >= 0 else f"  ortiqcha: {k(-r['left'])}")
+    return "<b>Ishchilar oyligi</b>\n" + pre(lines)
 
 
 def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
     start, end, title = period_range(kind, ref)
     d = collect(start, end, point_id)
-    scope = "ҳамма точкалар" if point_id is None else db.point_name(point_id)
+    scope = "hamma tochkalar" if point_id is None else db.point_name(point_id)
     out = [f"📊 <b>{escape(title)}</b> — {escape(scope)}"]
     if not (d.sales or d.expenses or d.yandex):
-        out.append("Маълумот йўқ.")
+        out.append("Ma'lumot yo'q.")
         return out
     out.append(pnl_block(d))
     if kind in ("bugun", "kecha"):
@@ -269,7 +272,7 @@ def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
         pp = per_point_block(d)
         if pp:
             out.append(pp)
-        out.append("<b>Кунма-кун</b>\n" + daily_block(d))
+        out.append("<b>Kunma-kun</b>\n" + daily_block(d))
         if kind == "oy" and point_id is None:
             sb = salary_block(start, end)
             if sb:
@@ -279,14 +282,14 @@ def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
 
 
 def digest(day: date) -> str:
-    """Эрталабки хулоса: кечаги кун + ой бошидан буён."""
+    """Ertalabki xulosa: kechagi kun + oy boshidan buyon."""
     d = collect(day, day)
     ms, me = month_range(day.year, day.month)
     m = collect(ms, day)
-    lines = [f"☀️ <b>Кечаги кун, {day:%d.%m}</b>",
-             pre([line("Тушум", d.income), line("Харажат", d.spent), line("Фарқ", d.income - d.spent)]),
-             f"<b>{MONTHS[day.month]} бошидан</b>",
-             pre([line("Тушум", m.income), line("Харажат", m.spent), line("Фарқ", m.income - m.spent)])]
+    lines = [f"☀️ <b>Kechagi kun, {day:%d.%m}</b>",
+             pre([line("Tushum", d.income), line("Xarajat", d.spent), line("Farq", d.income - d.spent)]),
+             f"<b>{MONTHS[day.month]} boshidan</b>",
+             pre([line("Tushum", m.income), line("Xarajat", m.spent), line("Farq", m.income - m.spent)])]
     lines += missing_sales(collect(ms, me))
     return "\n".join(lines)
 
@@ -300,32 +303,32 @@ def excel_report(start: date, end: date, path: str) -> str:
     bold = Font(bold=True)
     head = PatternFill("solid", fgColor="DDEBF7")
 
-    # 1. Хулоса
+    # 1. Xulosa
     ws = wb.active
-    ws.title = "Хулоса"
+    ws.title = "Xulosa"
     cats = d.by_cat()
-    ws.append([f"Давр: {start:%d.%m.%Y} – {end:%d.%m.%Y}", ""])
-    ws.append(["Кўрсаткич", "Сумма"])
-    for label, val in [("Нақд", d.cash), ("Карта", d.card), ("Яндекс", d.ya), ("ЖАМИ ТУШУМ", d.income), ("", None)]:
+    ws.append([f"Davr: {start:%d.%m.%Y} – {end:%d.%m.%Y}", ""])
+    ws.append(["Ko'rsatkich", "Summa"])
+    for label, val in [("Naqd", d.cash), ("Karta", d.card), ("Yandex", d.ya), ("JAMI TUSHUM", d.income), ("", None)]:
         ws.append([label, val])
     for key, name in CATEGORIES.items():
         ws.append([name, cats.get(key, 0)])
-    ws.append(["ЖАМИ ХАРАЖАТ", d.spent])
+    ws.append(["JAMI XARAJAT", d.spent])
     ws.append([])
-    ws.append(["ФОЙДА", d.income - d.spent])
+    ws.append(["FOYDA", d.income - d.spent])
     ws.append([])
-    ws.append(["Точка", "Тушум", "Харажат", "Фарқ"])
+    ws.append(["Tochka", "Tushum", "Xarajat", "Farq"])
     for pid, name in pts.items():
         inc = sum(r["cash"] + r["card"] for r in d.sales if r["point_id"] == pid) \
             + sum(r["amount"] for r in d.yandex if r["point_id"] == pid)
         exp = sum(r["amount"] for r in d.expenses if r["point_id"] == pid)
         ws.append([name, inc, exp, inc - exp])
-    ws.append(["Умумий", sum(r["amount"] for r in d.yandex if r["point_id"] is None),
+    ws.append(["Umumiy", sum(r["amount"] for r in d.yandex if r["point_id"] is None),
                sum(r["amount"] for r in d.expenses if r["point_id"] is None), None])
 
-    # 2. Кунма-кун
-    ws2 = wb.create_sheet("Кунма-кун")
-    ws2.append(["Сана", "Нақд", "Карта", "Яндекс", "Жами тушум", *CATEGORIES.values(), "Жами харажат", "Фарқ"])
+    # 2. Kunma-kun
+    ws2 = wb.create_sheet("Kunma-kun")
+    ws2.append(["Sana", "Naqd", "Karta", "Yandex", "Jami tushum", *CATEGORIES.values(), "Jami xarajat", "Farq"])
     day = start
     while day <= end:
         iso = day.isoformat()
@@ -338,39 +341,39 @@ def excel_report(start: date, end: date, path: str) -> str:
             ws2.append([iso, cash, card, ya, cash + card + ya, *[c.get(x, 0) for x in CATEGORIES], spent,
                         cash + card + ya - spent])
         day += timedelta(days=1)
-    ws2.append(["ЖАМИ", d.cash, d.card, d.ya, d.income, *[cats.get(x, 0) for x in CATEGORIES], d.spent,
+    ws2.append(["JAMI", d.cash, d.card, d.ya, d.income, *[cats.get(x, 0) for x in CATEGORIES], d.spent,
                 d.income - d.spent])
 
-    # 3. Савдо (кассирлар)
-    ws3 = wb.create_sheet("Кирим")
-    ws3.append(["Сана", "Точка", "Нақд", "Карта", "Жами", "Ким ёзди"])
+    # 3. Savdo (kassirlar)
+    ws3 = wb.create_sheet("Kirim")
+    ws3.append(["Sana", "Tochka", "Naqd", "Karta", "Jami", "Kim yozdi"])
     for r in d.sales:
         ws3.append([r["day"], pts.get(r["point_id"], "?"), r["cash"], r["card"], r["cash"] + r["card"],
                     db.user_names().get(r["created_by"], ("?",))[0]])
 
-    # 4. Харажатлар
-    ws4 = wb.create_sheet("Харажатлар")
+    # 4. Xarajatlar
+    ws4 = wb.create_sheet("Xarajatlar")
     names = db.user_names()
-    ws4.append(["№", "Сана", "Точка", "Категория", "Номи", "Миқдор", "Ишчи", "Сумма", "Ким ёзди"])
+    ws4.append(["№", "Sana", "Tochka", "Kategoriya", "Nomi", "Miqdor", "Ishchi", "Summa", "Kim yozdi"])
     for r in d.expenses:
-        ws4.append([r["id"], r["day"], pts.get(r["point_id"], "Умумий"), CATEGORIES[r["category"]],
+        ws4.append([r["id"], r["day"], pts.get(r["point_id"], "Umumiy"), CATEGORIES[r["category"]],
                     r["item"], r["quantity"], r["person"], r["amount"],
                     names.get(r["created_by"], ("?",))[0]])
 
-    # 5. Яндекс
-    ws5 = wb.create_sheet("Яндекс")
-    ws5.append(["Тушган кун", "Точка", "Сумма", "Изоҳ"])
+    # 5. Yandex
+    ws5 = wb.create_sheet("Yandex")
+    ws5.append(["Tushgan kun", "Tochka", "Summa", "Izoh"])
     for r in d.yandex:
-        ws5.append([r["day"], pts.get(r["point_id"], "Умумий"), r["amount"], r["note"]])
+        ws5.append([r["day"], pts.get(r["point_id"], "Umumiy"), r["amount"], r["note"]])
 
-    # 6. Ишчилар
-    ws6 = wb.create_sheet("Ишчилар")
-    ws6.append(["Ишчи", "Точка", "Ойлик", "Олди", "Қолди", "Ҳолати"])
+    # 6. Ishchilar
+    ws6 = wb.create_sheet("Ishchilar")
+    ws6.append(["Ishchi", "Tochka", "Oylik", "Oldi", "Qoldi", "Holati"])
     for r in employee_payments(start, end):
-        ws6.append([r["name"], r["point"], r["salary"], r["paid"], r["left"], "ишлайди" if r["active"] else "бўшаган"])
+        ws6.append([r["name"], r["point"], r["salary"], r["paid"], r["left"], "ishlaydi" if r["active"] else "bo'shagan"])
 
     for sheet in wb.worksheets:
-        hdr = 2 if sheet.title == "Хулоса" else 1
+        hdr = 2 if sheet.title == "Xulosa" else 1
         for c in sheet[hdr]:
             c.font, c.fill = bold, head
         for i, col in enumerate(sheet.columns, 1):
@@ -379,7 +382,7 @@ def excel_report(start: date, end: date, path: str) -> str:
         for row in sheet.iter_rows(min_row=hdr + 1):
             first = row[0].value
             for c in row:
-                if isinstance(c.value, int) and not (sheet.title == "Харажатлар" and c.column == 1):
+                if isinstance(c.value, int) and not (sheet.title == "Xarajatlar" and c.column == 1):
                     c.number_format = "#,##0"
                     c.alignment = Alignment(horizontal="right")
                 if isinstance(first, str) and (first.isupper() and len(first) > 2):

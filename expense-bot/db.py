@@ -1,4 +1,4 @@
-"""SQLite база. Бутун бизнес учун битта база (ҳамма хўжайинлар бир хил маълумотни кўради)."""
+"""SQLite baza. Butun biznes uchun bitta baza (hamma xo'jayinlar bir xil ma'lumotni ko'radi)."""
 import secrets
 import sqlite3
 from contextlib import contextmanager
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     point_id INTEGER REFERENCES points(id),
-    salary INTEGER NOT NULL DEFAULT 0,     -- ойлик, сўм
+    salary INTEGER NOT NULL DEFAULT 0,     -- oylik, so'm
     hired_on TEXT,
     fired_on TEXT,
     active INTEGER NOT NULL DEFAULT 1
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS employees (
 CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,
-    point_id INTEGER REFERENCES points(id),   -- NULL = умумий (ҳамма точкага)
+    point_id INTEGER REFERENCES points(id),   -- NULL = umumiy (hamma tochkaga)
     category TEXT NOT NULL,
     item TEXT NOT NULL,
     quantity TEXT,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS sales (
 
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    day TEXT NOT NULL,                        -- ҳисобга тушган кун
+    day TEXT NOT NULL,                        -- hisobga tushgan kun
     point_id INTEGER REFERENCES points(id),
     amount INTEGER NOT NULL,
     note TEXT,
@@ -109,7 +109,7 @@ def audit(tg_id: int, action: str, details: str = ""):
         c.execute("INSERT INTO audit(tg_id, action, details) VALUES (?,?,?)", (tg_id, action, details))
 
 
-# ---------- точкалар ----------
+# ---------- tochkalar ----------
 
 def add_point(name: str) -> int:
     with conn() as c:
@@ -124,13 +124,13 @@ def points(active_only: bool = True) -> list[sqlite3.Row]:
 
 def point_name(point_id) -> str:
     if not point_id:
-        return "Умумий"
+        return "Umumiy"
     with conn() as c:
         r = c.execute("SELECT name FROM points WHERE id=?", (point_id,)).fetchone()
     return r["name"] if r else f"#{point_id}"
 
 
-# ---------- фойдаланувчилар ----------
+# ---------- foydalanuvchilar ----------
 
 def get_user(tg_id: int):
     with conn() as c:
@@ -168,7 +168,7 @@ def cashiers_of(point_id: int) -> list[int]:
             "SELECT tg_id FROM users WHERE role='cashier' AND active=1 AND point_id=?", (point_id,))]
 
 
-# ---------- таклиф ҳаволалари ----------
+# ---------- taklif havolalari ----------
 
 def create_invite(role: str, point_id, created_by: int) -> str:
     code = secrets.token_urlsafe(9)
@@ -180,7 +180,7 @@ def create_invite(role: str, point_id, created_by: int) -> str:
 
 
 def use_invite(code: str, tg_id: int):
-    """Ҳаволани бир марта ишлатади. Яроқсиз бўлса None."""
+    """Havolani bir marta ishlatadi. Yaroqsiz bo'lsa None."""
     now = datetime.now(timezone.utc).isoformat()
     with conn() as c:
         updated = c.execute(
@@ -192,7 +192,7 @@ def use_invite(code: str, tg_id: int):
         return c.execute("SELECT * FROM invites WHERE code=?", (code,)).fetchone()
 
 
-# ---------- ходимлар ----------
+# ---------- xodimlar ----------
 
 def add_employee(name: str, point_id, salary: int, hired_on: date) -> int:
     with conn() as c:
@@ -225,7 +225,7 @@ def fire_employee(emp_id: int, day: date) -> bool:
 
 
 def find_employee(name: str):
-    """Исм бўйича (катта-кичик ҳарфсиз) фаол ходимни топади."""
+    """Ism bo'yicha (katta-kichik harfsiz) faol xodimni topadi."""
     if not name:
         return None
     n = name.strip().lower()
@@ -235,7 +235,7 @@ def find_employee(name: str):
     return None
 
 
-# ---------- харажатлар ----------
+# ---------- xarajatlar ----------
 
 def add_expenses(day: date, point_id, entries: list[dict], by: int) -> list[int]:
     ids = []
@@ -274,7 +274,7 @@ def delete_expense(expense_id: int):
         return row
 
 
-# ---------- савдо (нақд / карта) ----------
+# ---------- savdo (naqd / karta) ----------
 
 def get_sale(day: date, point_id: int):
     with conn() as c:
@@ -305,7 +305,7 @@ def sales_of_point(point_id: int, n: int = 7) -> list[sqlite3.Row]:
                          (point_id, n)).fetchall()
 
 
-# ---------- Яндекс ----------
+# ---------- Yandex ----------
 
 def add_yandex(day: date, point_id, amount: int, note: str | None, by: int) -> int:
     with conn() as c:
@@ -340,7 +340,7 @@ def first_sale_day(point_id: int):
 
 
 def ensure_owner(tg_id: int):
-    """.env даги OWNER_IDS ни ҳар доим хўжайин қилиб туради."""
+    """.env dagi OWNER_IDS ni har doim xo'jayin qilib turadi."""
     with conn() as c:
         c.execute("INSERT OR IGNORE INTO users(tg_id, role) VALUES (?, 'owner')", (tg_id,))
         c.execute("UPDATE users SET role='owner', active=1, point_id=NULL WHERE tg_id=?", (tg_id,))
@@ -352,6 +352,6 @@ def set_user_name(tg_id: int, name: str):
 
 
 def user_names() -> dict[int, tuple[str, str]]:
-    """tg_id -> (исм, роль)"""
+    """tg_id -> (ism, rol)"""
     with conn() as c:
         return {r["tg_id"]: (r["name"] or str(r["tg_id"]), r["role"]) for r in c.execute("SELECT * FROM users")}

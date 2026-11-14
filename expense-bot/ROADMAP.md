@@ -1,52 +1,52 @@
-# Ҳисобчи-бот: йўл харитаси
+# Hisobchi-bot: yo'l xaritasi
 
-Мақсад: ойда қанча савдо бўлди (нақд, карта, Яндекс), қанча харажат қилинди (бозорлик, ишчилар, ижара, прочее) ва қанча фойда қолди, ҳаммаси бир экранда, ҳар бир точка бўйича алоҳида кўринсин.
-
----
-
-## 0. Ҳозир, телефондан: кодни сақлаб қўйиш ⚠️
-
-Код сизнинг компьютерингизда эмас. У ҳозир шу Claude сессиясининг булутдаги вақтинчалик серверида турибди. Сессия ёпилса, ўчиб кетади. Уни GitHub'га юклаш керак, бунга компьютер шарт эмас:
-
-1. Телефон браузерида https://github.com/apps/claude/installations/select_target ни очинг.
-2. `wwtf339-wq` аккаунтини танланг ва **jarvis-dashboard** репосига рухсат беринг.
-3. Шу чатга «push қил» деб ёзинг.
-
-Шундан кейин код GitHub'да, `claude/telegram-expense-tracking-bot-kmd0y7` бранчида, `expense-bot/` папкасида сақланади.
+Maqsad: oyda qancha savdo bo'ldi (naqd, karta, Yandex), qancha xarajat qilindi (bozorlik, ishchilar, ijara, prochee) va qancha foyda qoldi, hammasi bir ekranda, har bir tochka bo'yicha alohida ko'rinsin.
 
 ---
 
-## 1. Ким нима қила олади
+## 0. Hozir, telefondan: kodni saqlab qo'yish ⚠️
 
-| | Хўжайин (2-3 киши) | Ходим / кассир (ҳар точкада) | Бегона одам |
+Kod sizning kompyuteringizda emas. U hozir shu Claude sessiyasining bulutdagi vaqtinchalik serverida turibdi. Sessiya yopilsa, o'chib ketadi. Uni GitHub'ga yuklash kerak, bunga kompyuter shart emas:
+
+1. Telefon brauzerida https://github.com/apps/claude/installations/select_target ni oching.
+2. `wwtf339-wq` akkauntini tanlang va **jarvis-dashboard** reposiga ruxsat bering.
+3. Shu chatga «push qil» deb yozing.
+
+Shundan keyin kod GitHub'da, `claude/telegram-expense-tracking-bot-kmd0y7` branchida, `expense-bot/` papkasida saqlanadi.
+
+---
+
+## 1. Kim nima qila oladi
+
+| | Xo'jayin (2-3 kishi) | Xodim / kassir (har tochkada) | Begona odam |
 |---|---|---|---|
-| Менюси | 💸 Харажат, 💰 Кирим + ҳисоботлар | фақат **💸 Харажат** ва **💰 Кирим** | — |
-| 💰 Кирим: смена охирида нақд/карта | ✅ | ✅ (ўз точкасига) | ❌ |
-| 💸 Харажат: овоз ёки матн билан | ✅ | ✅ (ўз точкасига; хўжайинларга хабар боради) | ❌ |
-| Яндекс тушумини ёзиш | ✅ | ❌ | ❌ |
-| Ҳисобот, Excel | ✅ | ❌ (фақат ўз точкасининг охирги 7 кунини кўради) | ❌ |
-| Точка, кассир, хўжайин қўшиш/ўчириш | ✅ | ❌ | ❌ |
-| Ишчини ишга олиш, ойлигини ўзгартириш, бўшатиш | ✅ | ❌ | ❌ |
-| Хатоларни ўчириш | ✅ | ўз савдосини қайта киритиб алмаштиради | ❌ |
+| Menyusi | 💸 Xarajat, 💰 Kirim + hisobotlar | faqat **💸 Xarajat** va **💰 Kirim** | — |
+| 💰 Kirim: smena oxirida naqd/karta | ✅ | ✅ (o'z tochkasiga) | ❌ |
+| 💸 Xarajat: ovoz yoki matn bilan | ✅ | ✅ (o'z tochkasiga; xo'jayinlarga xabar boradi) | ❌ |
+| Yandex tushumini yozish | ✅ | ❌ | ❌ |
+| Hisobot, Excel | ✅ | ❌ (faqat o'z tochkasining oxirgi 7 kunini ko'radi) | ❌ |
+| Tochka, kassir, xo'jayin qo'shish/o'chirish | ✅ | ❌ | ❌ |
+| Ishchini ishga olish, oyligini o'zgartirish, bo'shatish | ✅ | ❌ | ❌ |
+| Xatolarni o'chirish | ✅ | o'z savdosini qayta kiritib almashtiradi | ❌ |
 
-**Ботга қандай кирилади:**
-- **Асосий хўжайинлар** `.env` даги `OWNER_IDS` га ёзилади. Улар ботдан ҳеч қачон чиқариб юборилмайди.
-- **Қолганлар** (кассирлар, 3-хўжайин) фақат **таклиф ҳаволаси** орқали киради. Хўжайин `/kassir_qosh` ни босади, точкани танлайди, бот ҳавола беради. Ҳаволани кассирга Telegram'да юборасиз, у босади ва тайёр. Ҳавола 48 соат яшайди ва бир марта ишлайди.
-- Ҳаволасиз кирган одам «Рухсат йўқ» деган жавоб олади ва ҳеч нарсани кўрмайди.
-- Ишдан кетган кассир `/foydalanuvchilar` орқали битта тугма билан ўчирилади.
+**Botga qanday kiriladi:**
+- **Asosiy xo'jayinlar** `.env` dagi `OWNER_IDS` ga yoziladi. Ular botdan hech qachon chiqarib yuborilmaydi.
+- **Qolganlar** (kassirlar, 3-xo'jayin) faqat **taklif havolasi** orqali kiradi. Xo'jayin `/kassir_qosh` ni bosadi, tochkani tanlaydi, bot havola beradi. Havolani kassirga Telegram'da yuborasiz, u bosadi va tayyor. Havola 48 soat yashaydi va bir marta ishlaydi.
+- Havolasiz kirgan odam «Ruxsat yo'q» degan javob oladi va hech narsani ko'rmaydi.
+- Ishdan ketgan kassir `/foydalanuvchilar` orqali bitta tugma bilan o'chiriladi.
 
 ---
 
-## 2. Кечқурун, компьютерда (тахминан 30 дақиқа)
+## 2. Kechqurun, kompyuterda (taxminan 30 daqiqa)
 
-### 2.1 Калитларни олиш
-1. **Telegram бот токени:** @BotFather → `/newbot` → номи (масалан «Нуқта ҳисобчи») → username (охири `bot` билан тугайди) → токенни нусхаланг.
-2. **Gemini API калити:** https://aistudio.google.com/apikey → Google аккаунт билан киринг → **Create API key** → нусхаланг.
-3. **Telegram ID:** ҳар бир хўжайин @userinfobot га `/start` ёзади ва `Id` рақамини беради.
+### 2.1 Kalitlarni olish
+1. **Telegram bot tokeni:** @BotFather → `/newbot` → nomi (masalan «Nuqta hisobchi») → username (oxiri `bot` bilan tugaydi) → tokenni nusxalang.
+2. **Gemini API kaliti:** https://aistudio.google.com/apikey → Google akkaunt bilan kiring → **Create API key** → nusxalang.
+3. **Telegram ID:** har bir xo'jayin @userinfobot ga `/start` yozadi va `Id` raqamini beradi.
 
-> **Gemini Pro обунаси ҳақида:** 1,5 йиллик Pro обуна **Gemini иловаси** (gemini.google.com) учун. Бот ишлатадиган **API** алоҳида хизмат, обуна унга ўтмайди. Лекин API'нинг бепул лимити бу бот учун бемалол етади: кунига бир неча ўнлаб овозли хабар бу лимитнинг жуда кичик қисми.
+> **Gemini Pro obunasi haqida:** 1,5 yillik Pro obuna **Gemini ilovasi** (gemini.google.com) uchun. Bot ishlatadigan **API** alohida xizmat, obuna unga o'tmaydi. Lekin API'ning bepul limiti bu bot uchun bemalol yetadi: kuniga bir necha o'nlab ovozli xabar bu limitning juda kichik qismi.
 
-### 2.2 Ишга тушириб синаш
+### 2.2 Ishga tushirib sinash
 ```bash
 git clone https://github.com/wwtf339-wq/jarvis-dashboard.git
 cd jarvis-dashboard
@@ -57,173 +57,173 @@ python -m venv .venv
 pip install -r requirements.txt
 cp .env.example .env        # Windows: copy .env.example .env
 ```
-`.env` файлини очиб, учта қатор тўлдирилади:
+`.env` faylini ochib, uchta qator to'ldiriladi:
 ```
 TELEGRAM_BOT_TOKEN=123456:ABC...
 GEMINI_API_KEY=AIza...
 OWNER_IDS=111111111,222222222
 ```
-Кейин:
+Keyin:
 ```bash
 python bot.py
 ```
-Ботга `/start` ёзинг. Хўжайин менюси чиқса, ҳаммаси тўғри.
+Botga `/start` yozing. Xo'jayin menyusi chiqsa, hammasi to'g'ri.
 
-### 2.3 Биринчи синов
-1. `/nuqta_qosh Чилонзор`
-2. Овозли хабар: «10 кило помидор 100 минг, товуқ гўшти 10 кило 350 минг».
-3. Бот ажратиб кўрсатади, **✅ Сақлаш** ни босинг.
-4. «📅 Бугун» ни босинг, жадвал чиқади.
+### 2.3 Birinchi sinov
+1. `/nuqta_qosh Chilonzor`
+2. Ovozli xabar: «10 kilo pomidor 100 ming, tovuq go'shti 10 kilo 350 ming».
+3. Bot ajratib ko'rsatadi, **✅ Saqlash** ni bosing.
+4. «📅 Bugun» ni bosing, jadval chiqadi.
 
-Агар Gemini хато берса, кўпинча калит нотўғри ёки модел номи эскирган бўлади. 8-бўлимга қаранг.
+Agar Gemini xato bersa, ko'pincha kalit noto'g'ri yoki model nomi eskirgan bo'ladi. 8-bo'limga qarang.
 
 ---
 
-## 3. Бот доим ишлаб туриши учун (хостинг)
+## 3. Bot doim ishlab turishi uchun (xosting)
 
-`python bot.py` компьютер ёниқ турганда ишлайди. Кечаю кундуз ишлаши учун серверга қўйиш керак. Иккита йўл бор:
+`python bot.py` kompyuter yoniq turganda ishlaydi. Kechayu kunduz ishlashi uchun serverga qo'yish kerak. Ikkita yo'l bor:
 
-**А) Railway, телефондан ҳам бошқарса бўлади (тавсия)**
-1. https://railway.app → GitHub билан киринг.
-2. **New Project → Deploy from GitHub repo** → `jarvis-dashboard` → **Root directory:** `expense-bot`. `Dockerfile` бор, Railway уни ўзи танийди.
-3. **Variables** бўлимида `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `OWNER_IDS` ни киритинг.
-4. **Volume** қўшинг, mount path: `/data`. Бусиз ҳар янгиланишда база ўчиб кетади.
-5. Нархи тахминан ойига $5 атрофида. Аниқ тарифни сайтдан текширинг.
+**A) Railway, telefondan ham boshqarsa bo'ladi (tavsiya)**
+1. https://railway.app → GitHub bilan kiring.
+2. **New Project → Deploy from GitHub repo** → `jarvis-dashboard` → **Root directory:** `expense-bot`. `Dockerfile` bor, Railway uni o'zi taniydi.
+3. **Variables** bo'limida `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `OWNER_IDS` ni kiriting.
+4. **Volume** qo'shing, mount path: `/data`. Busiz har yangilanishda baza o'chib ketadi.
+5. Narxi taxminan oyiga $5 atrofida. Aniq tarifni saytdan tekshiring.
 
-**Б) Арзон VPS (Linux сервер)**
-Сервер олинади, кодни `/opt/expense-bot` га ташланади, `.venv` ўрнатилади, кейин `expense-bot.service` файли билан systemd орқали доимий ишга туширилади. Буйруқлари файлнинг ичида ёзилган.
+**B) Arzon VPS (Linux server)**
+Server olinadi, kodni `/opt/expense-bot` ga tashlanadi, `.venv` o'rnatiladi, keyin `expense-bot.service` fayli bilan systemd orqali doimiy ishga tushiriladi. Buyruqlari faylning ichida yozilgan.
 
-**В) Бепул: Google Cloud e2-micro (доимий бепул тариф)**
-1. https://cloud.google.com/free → рўйхатдан ўтиш. Visa/Mastercard карта сўралади (Humo/Uzcard ўтмайди), лекин бепул лимитда пул ечилмайди.
+**V) Bepul: Google Cloud e2-micro (doimiy bepul tarif)**
+1. https://cloud.google.com/free → ro'yxatdan o'tish. Visa/Mastercard karta so'raladi (Humo/Uzcard o'tmaydi), lekin bepul limitda pul yechilmaydi.
 2. Compute Engine → **Create instance**:
-   - Region: `us-central1`, `us-west1` ёки `us-east1` (фақат шулар бепул)
+   - Region: `us-central1`, `us-west1` yoki `us-east1` (faqat shular bepul)
    - Machine type: **e2-micro**
-   - Boot disk: Ubuntu, **Standard persistent disk**, 30 GB гача
-   - Статик IP **олманг** (пулли). Бот ташқи IP'сиз ҳам ишлайди.
-3. Браузердаги **SSH** тугмаси орқали серверга кириб:
+   - Boot disk: Ubuntu, **Standard persistent disk**, 30 GB gacha
+   - Statik IP **olmang** (pulli). Bot tashqi IP'siz ham ishlaydi.
+3. Brauzerdagi **SSH** tugmasi orqali serverga kirib:
    ```bash
    sudo apt update && sudo apt install -y git python3-venv
    sudo git clone https://github.com/wwtf339-wq/jarvis-dashboard.git /opt/src
    cd /opt/src && sudo git checkout claude/telegram-expense-tracking-bot-kmd0y7
    sudo cp -r /opt/src/expense-bot /opt/expense-bot && cd /opt/expense-bot
    sudo python3 -m venv .venv && sudo .venv/bin/pip install -r requirements.txt
-   sudo cp .env.example .env && sudo nano .env      # 3 та қаторни тўлдиринг
+   sudo cp .env.example .env && sudo nano .env      # 3 ta qatorni to'ldiring
    sudo cp expense-bot.service /etc/systemd/system/
    sudo systemctl enable --now expense-bot
-   sudo systemctl status expense-bot                # "active (running)" бўлиши керак
+   sudo systemctl status expense-bot                # "active (running)" bo'lishi kerak
    ```
-4. Billing → **Budgets & alerts** да $1 лик огоҳлантириш қўйинг: тасодифан пул ечила бошласа, хат келади.
+4. Billing → **Budgets & alerts** da $1 lik ogohlantirish qo'ying: tasodifan pul yechila boshlasa, xat keladi.
 
-**Г) Бепул, картасиз: эски Android телефон**
-Termux иловасини (F-Droid'дан) ўрнатиб, ўша буйруқлар билан `python bot.py` ни ишга туширасиз. Телефон доим зарядда ва интернетда туриши керак. Бу энг оддий йўл, лекин ток ёки интернет ўчса, бот ҳам тўхтайди.
+**G) Bepul, kartasiz: eski Android telefon**
+Termux ilovasini (F-Droid'dan) o'rnatib, o'sha buyruqlar bilan `python bot.py` ni ishga tushirasiz. Telefon doim zaryadda va internetda turishi kerak. Bu eng oddiy yo'l, lekin tok yoki internet o'chsa, bot ham to'xtaydi.
 
-> Иккала ҳолатда ҳам бот **бир жойда** ишлаши керак. Компьютерда ва серверда бир вақтда ёқилса, Telegram хато беради.
-
----
-
-## 4. Биринчи кун: созлаш тартиби
-
-1. **Точкалар:** `/nuqta_qosh Чилонзор`, `/nuqta_qosh Юнусобод`…
-2. **Кассирлар:** `/kassir_qosh` → точкани танлаш → ҳаволани кассирга юбориш. Ҳар бир кассирга алоҳида ҳавола. Кассир қўшилганда хўжайинларга хабар келади.
-3. **3-хўжайин (керак бўлса):** `/hujayin_qosh` → ҳавола.
-4. **Ходимлар:** ҳамма ишчини ойлиги билан киритинг:
-   `/ishchi_qosh Ибрат 4000000` (бир нечта точка бўлса, бот қайси точкалигини сўрайди)
-   `/ishchilar` — рўйхат ва рақамлари
-   `/oylik 3 4500000` — ойликни ўзгартириш
-   `/boshat 3` — бўшатиш (ой охиригача ҳисоботда кўриниб туради)
-5. Текшириш: `/nuqtalar` ва `/foydalanuvchilar`.
+> Ikkala holatda ham bot **bir joyda** ishlashi kerak. Kompyuterda va serverda bir vaqtda yoqilsa, Telegram xato beradi.
 
 ---
 
-## 5. Кундалик иш тартиби
+## 4. Birinchi kun: sozlash tartibi
 
-### Ходим / кассир
-**Кун давомида, пул чиққанда:** **💸 Харажат** ни босади ва овоз ёки матн юборади:
-«Ибрат 100 минг ўзига олди, 50 минг бензин қуйдим». Бот ажратиб кўрсатади, ходим **✅ Сақлаш** ни босади.
-Хўжайинларга «Али харажат ёзди: …» деган хабар боради. Ҳисоботда ҳар бир харажат остида ким ёзгани (✍ Али) кўринади.
-
-**Смена охирида (1 дақиқа):**
-1. **💰 Кирим** ни босади.
-2. Нақд суммани ёзади: `2 500 000`, `2.500.000` ёки `2,5 млн`.
-3. Картага тушганини ёзади (терминал, Click, Payme).
-4. **✅ Сақлаш** ни босади.
-
-- Кечаси 05:00 гача киритилган савдо олдинги иш кунига ёзилади. Точка кечаси 2-3 да ёпилса ҳам тўғри ҳисобланади.
-- Хато ёзса, «💰 Кирим» ни яна босади ва тўғрисини ёзади. Бот эскисини кўрсатиб, алмаштиради.
-- Унутса, бот соат 23:30 да эслатади. Эртасига ёзмоқчи бўлса, «💰 Кирим» дан кейин чиқадиган **📆 Кечаги кун учун** тугмасини босади.
-- Кассир сақлаши билан хўжайинларга «Чилонзор, 14.11: нақд …, карта …» деган хабар келади.
-
-### Хўжайин
-- **Бозорлик / тўловлар:** битта овозли хабарда ҳаммасини айтиш мумкин:
-  «Помидор 10 кило 100 минг, товуқ 10 кило 350 минг, Ибрат 100 минг олди, свет учун 400 минг тўладим».
-  Бот ҳар бирини категорияга ажратади, сиз текшириб **Сақлаш** ни босасиз.
-- «Кеча …» деб бошласангиз, кечаги санага ёзилади.
-- Точка номини айтсангиз («Чилонзорга…»), ўша точкага ёзилади. Айтмасангиз, бот сўрайди. Ижара каби ҳамма точкага тегишли харажатлар учун **Умумий** ни танланг.
-- Ишчи исми рўйхатдагига мос келса, тўлов ўша ишчининг ойлик ҳисобига тушади. Рўйхатда йўқ исм бўлса, бот «⚠️ рўйхатда йўқ» деб огоҳлантиради.
-
-### Автоматик
-- **09:00:** ҳамма хўжайинга кечаги кун ва ой бошидан буёнги хулоса келади. Савдо киритилмаган кунлар ⚠️ билан кўрсатилади.
-- **23:30:** савдо киритмаган кассирга эслатма боради.
-- **Якшанба 10:00:** асосий хўжайинга базанинг заҳира нусхаси (файл) келади. Шу файл бўлса, ҳеч нарса йўқолмайди.
-
-Вақтларни `.env` даги `DIGEST_TIME`, `SALES_REMINDER_TIME`, `BACKUP_*` орқали ўзгартириш мумкин.
+1. **Tochkalar:** `/nuqta_qosh Chilonzor`, `/nuqta_qosh Yunusobod`…
+2. **Kassirlar:** `/kassir_qosh` → tochkani tanlash → havolani kassirga yuborish. Har bir kassirga alohida havola. Kassir qo'shilganda xo'jayinlarga xabar keladi.
+3. **3-xo'jayin (kerak bo'lsa):** `/hujayin_qosh` → havola.
+4. **Xodimlar:** hamma ishchini oyligi bilan kiriting:
+   `/ishchi_qosh Ibrat 4000000` (bir nechta tochka bo'lsa, bot qaysi tochkaligini so'raydi)
+   `/ishchilar` — ro'yxat va raqamlari
+   `/oylik 3 4500000` — oylikni o'zgartirish
+   `/boshat 3` — bo'shatish (oy oxirigacha hisobotda ko'rinib turadi)
+5. Tekshirish: `/nuqtalar` va `/foydalanuvchilar`.
 
 ---
 
-## 6. Яндекс Доставка
+## 5. Kundalik ish tartibi
 
-Яндекс пули ҳафтада бир марта ҳисоб рақамга тушади. Бот уни **пул тушган кунга** алоҳида «Яндекс» қатори қилиб ёзади.
+### Xodim / kassir
+**Kun davomida, pul chiqqanda:** **💸 Xarajat** ni bosadi va ovoz yoki matn yuboradi:
+«Ibrat 100 ming o'ziga oldi, 50 ming benzin quydim». Bot ajratib ko'rsatadi, xodim **✅ Saqlash** ni bosadi.
+Xo'jayinlarga «Ali xarajat yozdi: …» degan xabar boradi. Hisobotda har bir xarajat ostida kim yozgani (✍ Ali) ko'rinadi.
 
-- Овоз билан: «Яндексдан 2 миллион 400 минг тушди, 3-9 ноябрь учун».
-- Ёки буйруқ билан: `/yandex 2400000 3-9 ноябрь`.
-- Точкани танлайсиз. Агар Яндекс битта ҳисобга ҳамма точканикини бирга туширса, **Умумий** ни танланг.
+**Smena oxirida (1 daqiqa):**
+1. **💰 Kirim** ni bosadi.
+2. Naqd summani yozadi: `2 500 000`, `2.500.000` yoki `2,5 mln`.
+3. Kartaga tushganini yozadi (terminal, Click, Payme).
+4. **✅ Saqlash** ni bosadi.
 
-**Эслаб қолинг:** ой охирида Яндекс сотган, лекин пули кейинги ойда тушган савдо кейинги ойга ёзилади. Бу банк ҳисобига мос келади ва текшириш осон. Яндекс комиссиясини алоҳида кўриш 9-бўлимдаги режада бор.
+- Kechasi 05:00 gacha kiritilgan savdo oldingi ish kuniga yoziladi. Tochka kechasi 2-3 da yopilsa ham to'g'ri hisoblanadi.
+- Xato yozsa, «💰 Kirim» ni yana bosadi va to'g'risini yozadi. Bot eskisini ko'rsatib, almashtiradi.
+- Unutsa, bot soat 23:30 da eslatadi. Ertasiga yozmoqchi bo'lsa, «💰 Kirim» dan keyin chiqadigan **📆 Kechagi kun uchun** tugmasini bosadi.
+- Kassir saqlashi bilan xo'jayinlarga «Chilonzor, 14.11: naqd …, karta …» degan xabar keladi.
 
----
+### Xo'jayin
+- **Bozorlik / to'lovlar:** bitta ovozli xabarda hammasini aytish mumkin:
+  «Pomidor 10 kilo 100 ming, tovuq 10 kilo 350 ming, Ibrat 100 ming oldi, svet uchun 400 ming to'ladim».
+  Bot har birini kategoriyaga ajratadi, siz tekshirib **Saqlash** ni bosasiz.
+- «Kecha …» deb boshlasangiz, kechagi sanaga yoziladi.
+- Tochka nomini aytsangiz («Chilonzorga…»), o'sha tochkaga yoziladi. Aytmasangiz, bot so'raydi. Ijara kabi hamma tochkaga tegishli xarajatlar uchun **Umumiy** ni tanlang.
+- Ishchi ismi ro'yxatdagiga mos kelsa, to'lov o'sha ishchining oylik hisobiga tushadi. Ro'yxatda yo'q ism bo'lsa, bot «⚠️ ro'yxatda yo'q» deb ogohlantiradi.
 
-## 7. Ой охири: ҳисобот
+### Avtomatik
+- **09:00:** hamma xo'jayinga kechagi kun va oy boshidan buyongi xulosa keladi. Savdo kiritilmagan kunlar ⚠️ bilan ko'rsatiladi.
+- **23:30:** savdo kiritmagan kassirga eslatma boradi.
+- **Yakshanba 10:00:** asosiy xo'jayinga bazaning zahira nusxasi (fayl) keladi. Shu fayl bo'lsa, hech narsa yo'qolmaydi.
 
-- **🗓 Ой** ни босинг, Telegram'нинг ўзида қуйидагилар чиқади:
-  - **Тушум:** нақд, карта, Яндекс, жами
-  - **Харажат:** бозорлик, ишчилар, ижара, прочее, жами
-  - **Фойда / зарар**
-  - **Точкалар кесимида:** ҳар бир точканинг тушуми, харажати ва фарқи
-  - **Кунма-кун жадвал**
-  - **Ишчилар ойлиги:** ойлиги, олгани, қолдиғи
-  - Савдо киритилмаган кунлар ⚠️
-- Пастдаги точка тугмаларидан бирини боссангиз, фақат ўша точканинг ҳисоботи чиқади.
-- **📊 Excel** 6 варақли файл юборади: Хулоса, Кунма-кун, Савдо, Харажатлар, Яндекс, Ишчилар. Уни бухгалтерга ёки шерикка юбориш мумкин.
-- Ўтган ойлар учун: `/oy 2026-10`, `/excel 2026-10`.
-- Хато ёзувлар: `/oxirgi` → `/ochir 15` (харажат) ёки `/yandex_ochir 3`. Ким нимани ўчиргани базада сақланади.
-
----
-
-## 8. Gemini модели
-
-- `.env` да `GEMINI_MODEL=gemini-flash-latest` турибди. Бу Google'нинг расмий тахаллуси. Google уни ҳар доим энг янги Flash моделига улайди ва алмаштиришдан олдин 2 ҳафта олдин хабар беради.
-- **«Hydrogen» ҳақида:** бу ҳозирча тестерлар орасида юрган норасмий ном. Google уни API'да ҳали эълон қилмаган. Айтишларича, у кейинги Flash модели бўлади. Шундай бўлса, `gemini-flash-latest` чиққанда ўзи ўша моделга ўтади ва ҳеч нарсани ўзгартириш керак бўлмайди.
-- Аниқ бир версияда қотириш учун AI Studio'даги модел рўйхатидан номни олиб, `GEMINI_MODEL` га ёзинг.
-- **Махфийлик:** Gemini API'нинг бепул тарифида Google юборилган маълумотларни ўз хизматларини яхшилаш учун ишлатиши мумкин. Бу ерда фақат харажат овозлари юборилади, кассирларнинг савдо рақамлари Gemini'га бормайди. Буни ҳам истамасангиз, AI Studio'да billing'ни ёқиш мумкин. Пулли тарифда маълумот ўқитиш учун ишлатилмайди, нархи эса бундай ҳажмда арзимас.
+Vaqtlarni `.env` dagi `DIGEST_TIME`, `SALES_REMINDER_TIME`, `BACKUP_*` orqali o'zgartirish mumkin.
 
 ---
 
-## 9. Кейинги босқичлар (керак бўлганда)
+## 6. Yandex Dostavka
 
-| Босқич | Нима қўшилади | Нима беради |
+Yandex puli haftada bir marta hisob raqamga tushadi. Bot uni **pul tushgan kunga** alohida «Yandex» qatori qilib yozadi.
+
+- Ovoz bilan: «Yandexdan 2 million 400 ming tushdi, 3-9 noyabr uchun».
+- Yoki buyruq bilan: `/yandex 2400000 3-9 noyabr`.
+- Tochkani tanlaysiz. Agar Yandex bitta hisobga hamma tochkanikini birga tushirsa, **Umumiy** ni tanlang.
+
+**Eslab qoling:** oy oxirida Yandex sotgan, lekin puli keyingi oyda tushgan savdo keyingi oyga yoziladi. Bu bank hisobiga mos keladi va tekshirish oson. Yandex komissiyasini alohida ko'rish 9-bo'limdagi rejada bor.
+
+---
+
+## 7. Oy oxiri: hisobot
+
+- **🗓 Oy** ni bosing, Telegram'ning o'zida quyidagilar chiqadi:
+  - **Tushum:** naqd, karta, Yandex, jami
+  - **Xarajat:** bozorlik, ishchilar, ijara, prochee, jami
+  - **Foyda / zarar**
+  - **Tochkalar kesimida:** har bir tochkaning tushumi, xarajati va farqi
+  - **Kunma-kun jadval**
+  - **Ishchilar oyligi:** oyligi, olgani, qoldig'i
+  - Savdo kiritilmagan kunlar ⚠️
+- Pastdagi tochka tugmalaridan birini bossangiz, faqat o'sha tochkaning hisoboti chiqadi.
+- **📊 Excel** 6 varaqli fayl yuboradi: Xulosa, Kunma-kun, Savdo, Xarajatlar, Yandex, Ishchilar. Uni buxgalterga yoki sherikka yuborish mumkin.
+- O'tgan oylar uchun: `/oy 2026-10`, `/excel 2026-10`.
+- Xato yozuvlar: `/oxirgi` → `/ochir 15` (xarajat) yoki `/yandex_ochir 3`. Kim nimani o'chirgani bazada saqlanadi.
+
+---
+
+## 8. Gemini modeli
+
+- `.env` da `GEMINI_MODEL=gemini-flash-latest` turibdi. Bu Google'ning rasmiy taxallusi. Google uni har doim eng yangi Flash modeliga ulaydi va almashtirishdan oldin 2 hafta oldin xabar beradi.
+- **«Hydrogen» haqida:** bu hozircha testerlar orasida yurgan norasmiy nom. Google uni API'da hali e'lon qilmagan. Aytishlaricha, u keyingi Flash modeli bo'ladi. Shunday bo'lsa, `gemini-flash-latest` chiqqanda o'zi o'sha modelga o'tadi va hech narsani o'zgartirish kerak bo'lmaydi.
+- Aniq bir versiyada qotirish uchun AI Studio'dagi model ro'yxatidan nomni olib, `GEMINI_MODEL` ga yozing.
+- **Maxfiylik:** Gemini API'ning bepul tarifida Google yuborilgan ma'lumotlarni o'z xizmatlarini yaxshilash uchun ishlatishi mumkin. Bu yerda faqat xarajat ovozlari yuboriladi, kassirlarning savdo raqamlari Gemini'ga bormaydi. Buni ham istamasangiz, AI Studio'da billing'ni yoqish mumkin. Pulli tarifda ma'lumot o'qitish uchun ishlatilmaydi, narxi esa bunday hajmda arzimas.
+
+---
+
+## 9. Keyingi bosqichlar (kerak bo'lganda)
+
+| Bosqich | Nima qo'shiladi | Nima beradi |
 |---|---|---|
-| 2 | **Касса харажатлари:** кассир точкадан чиққан майда харажатни (нон, газ баллон) ёзади | Нақд пул қаерга кетгани кўринади |
-| 2 | **Кассадаги қолдиқ:** нақд савдо минус касса харажатлари минус хўжайин олиб кетгани | Ўғирлик ёки камомадни дарров сезиш |
-| 2 | **Яндекс комиссияси:** Яндекс ҳисоботидаги савдо суммаси билан тушган пулни солиштириш | Яндекс қанча олаётгани аниқ кўринади |
-| 3 | **Насия (қарз):** етказиб берувчиларга қарз, ким қанча олиши керак | Ой охирида кутилмаган қарз чиқмайди |
-| 3 | **Ишчилар давомати:** келди/келмади, ойлик ўзи ҳисобланади | Прогул ва ярим кун тўғри ҳисобланади |
-| 3 | **Google Sheets'га автомат ёзиш** | Шерик ботсиз, жадвалда кўради |
-| 4 | **Web dashboard** (`jarvis-dashboard` ичида) | Катта экранда графиклар, ойларни солиштириш |
+| 2 | **Kassa xarajatlari:** kassir tochkadan chiqqan mayda xarajatni (non, gaz ballon) yozadi | Naqd pul qayerga ketgani ko'rinadi |
+| 2 | **Kassadagi qoldiq:** naqd savdo minus kassa xarajatlari minus xo'jayin olib ketgani | O'g'irlik yoki kamomadni darrov sezish |
+| 2 | **Yandex komissiyasi:** Yandex hisobotidagi savdo summasi bilan tushgan pulni solishtirish | Yandex qancha olayotgani aniq ko'rinadi |
+| 3 | **Nasiya (qarz):** yetkazib beruvchilarga qarz, kim qancha olishi kerak | Oy oxirida kutilmagan qarz chiqmaydi |
+| 3 | **Ishchilar davomati:** keldi/kelmadi, oylik o'zi hisoblanadi | Progul va yarim kun to'g'ri hisoblanadi |
+| 3 | **Google Sheets'ga avtomat yozish** | Sherik botsiz, jadvalda ko'radi |
+| 4 | **Web dashboard** (`jarvis-dashboard` ichida) | Katta ekranda grafiklar, oylarni solishtirish |
 
 ---
 
-## 10. Хавфсизлик эслатмалари
+## 10. Xavfsizlik eslatmalari
 
-- `.env` файлини ҳеч кимга юборманг ва GitHub'га юкламанг. `.gitignore` уни ўзи четлаб ўтади.
-- Токен бегонага тушиб қолса, @BotFather → `/revoke` → янги токен олинг.
-- Якшанба куни келадиган заҳира файлни ўчирманг. Сервер бузилса, шу файлни `DB_PATH` га қўйиш кифоя.
+- `.env` faylini hech kimga yubormang va GitHub'ga yuklamang. `.gitignore` uni o'zi chetlab o'tadi.
+- Token begonaga tushib qolsa, @BotFather → `/revoke` → yangi token oling.
+- Yakshanba kuni keladigan zahira faylni o'chirmang. Server buzilsa, shu faylni `DB_PATH` ga qo'yish kifoya.

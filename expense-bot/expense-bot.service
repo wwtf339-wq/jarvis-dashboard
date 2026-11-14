@@ -1,4 +1,4 @@
-# VPS учун: sudo cp expense-bot.service /etc/systemd/system/ && sudo systemctl enable --now expense-bot
+# VPS uchun: sudo cp expense-bot.service /etc/systemd/system/ && sudo systemctl enable --now expense-bot
 [Unit]
 Description=Fast-food accounting Telegram bot
 After=network-online.target
