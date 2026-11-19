@@ -147,7 +147,7 @@ Termux ilovasini (F-Droid'dan) o'rnatib, o'sha buyruqlar bilan `python bot.py` n
 2. **Kassirlar:** `/kassir_qosh` → tochkani tanlash → havolani kassirga yuborish. Har bir kassirga alohida havola. Kassir qo'shilganda xo'jayinlarga xabar keladi.
 3. **3-xo'jayin (kerak bo'lsa):** `/hujayin_qosh` → havola.
 4. **Xodimlar:** hamma ishchini oyligi bilan kiriting:
-   `/ishchi_qosh Ibrat 4000000` (bir nechta tochka bo'lsa, bot qaysi tochkaligini so'raydi)
+   `/ishchi_qosh Ibrat, Jahongir, Otabek` (faqat ism yetadi, oylikni keyin `/oylik № summa` bilan qo'yasiz; bir nechta tochka bo'lsa, bot qaysi tochkaligini so'raydi)
    `/ishchilar` — ro'yxat va raqamlari
    `/oylik 3 4500000` — oylikni o'zgartirish
    `/boshat 3` — bo'shatish (oy oxirigacha hisobotda ko'rinib turadi)

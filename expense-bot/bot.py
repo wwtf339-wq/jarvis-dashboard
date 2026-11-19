@@ -61,7 +61,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 
 👥 <b>Xodimlar (oylik hisobi)</b>
 /ishchilar — ro'yxat
-/ishchi_qosh Ism Oylik — ishga olish (/ishchi_qosh Ibrat 4000000)
+/ishchi_qosh Ism — ishga olish (/ishchi_qosh Ibrat, Jahongir)
 /oylik № Summa — oylikni o'zgartirish
 /boshat № — ishdan bo'shatish
 
@@ -282,37 +282,66 @@ async def users_cmd(update, ctx, u):
 async def staff_cmd(update, ctx, u):
     emps = db.employees()
     if not emps:
-        return await update.message.reply_text("Xodim yo'q. Ishga olish: /ishchi_qosh Ibrat 4000000")
+        return await update.message.reply_text("Xodim yo'q.\n" + ADD_EMP_HELP)
     lines = [f"№{e['id']} <b>{escape(e['name'])}</b> — {escape(db.point_name(e['point_id']))}, "
-             f"oylik {som(e['salary'])}" for e in emps]
+             + (f"oylik {som(e['salary'])}" if e['salary'] else "oylik belgilanmagan") for e in emps]
     lines.append("\nOylikni o'zgartirish: /oylik № Summa\nBo'shatish: /boshat №")
     await update.message.reply_text("\n".join(lines), parse_mode=HTML)
 
 
+ADD_EMP_HELP = ("Ishchi qo'shish: /ishchi_qosh Ibrat\n"
+                "Bir nechtasini birdan: /ishchi_qosh Ibrat, Jahongir, Otabek\n"
+                "Oyligini keyin qo'yish mumkin: /oylik № summa")
+
+
+def _split_employee(part: str):
+    """'Ibrat' -> ('Ibrat', 0);  'Ibrat 4000000' -> ('Ibrat', 4000000)."""
+    words = part.split()
+    salary = reports.parse_amount(words[-1]) if len(words) > 1 else None
+    if salary:
+        words = words[:-1]
+    name = " ".join(words).strip()
+    return (name[:1].upper() + name[1:], salary or 0) if name else None
+
+
 @owner_only
 async def add_employee_cmd(update, ctx, u):
-    if len(ctx.args) < 2:
-        return await update.message.reply_text("Format: /ishchi_qosh Ibrat 4000000")
-    salary = reports.parse_amount(ctx.args[-1])
-    name = " ".join(ctx.args[:-1]).strip()
-    if salary is None or not name:
-        return await update.message.reply_text("Format: /ishchi_qosh Ibrat 4000000")
-    if db.find_employee(name):
-        return await update.message.reply_text("Bunday ismli xodim bor. Farqlash uchun familiyasini qo'shing.")
-    item = dict(type="emp", name=name, salary=salary, by=u["tg_id"])
+    raw = " ".join(ctx.args)
+    people, skipped = [], []
+    for part in raw.split(","):
+        got = _split_employee(part)
+        if not got:
+            continue
+        if db.find_employee(got[0]) or any(p[0].lower() == got[0].lower() for p in people):
+            skipped.append(got[0])
+        else:
+            people.append(got)
+    note = ""
+    if skipped:
+        note = ("Bu ismlar ro'yxatda allaqachon bor: " + ", ".join(skipped)
+                + ". Farqlash uchun familiyasini qo'shing (masalan Ibrat Karimov).\n")
+    if not people:
+        return await update.message.reply_text(note + ADD_EMP_HELP)
+    item = dict(type="emp", people=people, note=note, by=u["tg_id"])
     pts = db.points()
     if len(pts) > 1:
         key = stash(ctx, item)
-        return await update.message.reply_text(f"{name} qaysi tochkada ishlaydi?", reply_markup=points_kb(f"pt:{key}"))
+        names = ", ".join(p[0] for p in people)
+        return await update.message.reply_text(f"{names} qaysi tochkada ishlaydi?", reply_markup=points_kb(f"pt:{key}"))
     item["point"] = pts[0]["id"] if pts else None
     await finish_employee(update.message, item)
 
 
 async def finish_employee(message, item):
-    eid = db.add_employee(item["name"], item.get("point"), item["salary"], business_today())
-    db.audit(item["by"], "employee_add", f"{eid} {item['name']} {item['salary']}")
-    await message.reply_text(f"✅ {item['name']} ishga olindi (№{eid}), {db.point_name(item.get('point'))}, "
-                             f"oylik {som(item['salary'])}")
+    lines = []
+    for name, salary in item["people"]:
+        eid = db.add_employee(name, item.get("point"), salary, business_today())
+        db.audit(item["by"], "employee_add", f"{eid} {name} {salary}")
+        pay = f"oylik {som(salary)}" if salary else "oylik belgilanmagan"
+        lines.append(f"✅ №{eid} {name} — {pay}")
+    head = f"Ishga olindi ({db.point_name(item.get('point'))}):\n"
+    tail = "\n\nOylik qo'yish: /oylik № summa  (masalan /oylik 1 4000000)"
+    await message.reply_text(item.get("note", "") + head + "\n".join(lines) + tail)
 
 
 @owner_only
