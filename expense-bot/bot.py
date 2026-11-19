@@ -62,7 +62,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 👥 <b>Xodimlar (oylik hisobi)</b>
 /ishchilar — ro'yxat
 /ishchi_qosh Ism — ishga olish (/ishchi_qosh Ibrat, Jahongir)
-/oylik № Summa — oylikni o'zgartirish
+/oylik Ism Summa — oylikni o'zgartirish
 /boshat № — ishdan bo'shatish
 
 💰 <b>Pul</b>
@@ -297,13 +297,13 @@ async def staff_cmd(update, ctx, u):
         else:
             line += f"   oylik belgilanmagan · bu oy oldi {som(got)}"
         lines.append(line)
-    lines.append("\nOylikni o'zgartirish: /oylik № Summa\nBo'shatish: /boshat №")
+    lines.append("\nOylikni o'zgartirish: /oylik Ism Summa\nBo'shatish: /boshat №")
     await update.message.reply_text("\n".join(lines), parse_mode=HTML)
 
 
 ADD_EMP_HELP = ("Ishchi qo'shish: /ishchi_qosh Ibrat\n"
                 "Bir nechtasini birdan: /ishchi_qosh Ibrat, Jahongir, Otabek\n"
-                "Oyligini keyin qo'yish mumkin: /oylik № summa")
+                "Oyligini keyin qo'yish mumkin: /oylik Ism summa")
 
 
 def _split_employee(part: str):
@@ -352,19 +352,46 @@ async def finish_employee(message, item):
         pay = f"oylik {som(salary)}" if salary else "oylik belgilanmagan"
         lines.append(f"✅ №{eid} {name} — {pay}")
     head = f"Ishga olindi ({db.point_name(item.get('point'))}):\n"
-    tail = "\n\nOylik qo'yish: /oylik № summa  (masalan /oylik 1 4000000)"
+    tail = "\n\nOylik qo'yish: /oylik Ism summa  (masalan /oylik Jahongir 6000000)"
     await message.reply_text(item.get("note", "") + head + "\n".join(lines) + tail)
+
+
+SALARY_HELP = ("Oylik belgilash:\n"
+               "• /oylik Jahongir 6000000\n"
+               "• yoki /oylik ni bosib, ro'yxatdan ishchini tanlang")
+
+
+async def apply_salary(message, u, emp, sal: int):
+    db.set_salary(emp["id"], sal)
+    db.audit(u["tg_id"], "salary_set", f"{emp['id']} {sal}")
+    await message.reply_text(f"✅ {emp['name']} oyligi: {som(sal)}\n"
+                             "Bu xarajat emas — faqat oylik miqdori. Qoldiq 👥 Xodimlar da ko'rinadi.")
 
 
 @owner_only
 async def salary_cmd(update, ctx, u):
-    if len(ctx.args) != 2 or not ctx.args[0].isdigit() or reports.parse_amount(ctx.args[1]) is None:
-        return await update.message.reply_text("Format: /oylik 3 4500000")
-    eid, sal = int(ctx.args[0]), reports.parse_amount(ctx.args[1])
-    if not db.set_salary(eid, sal):
-        return await update.message.reply_text("Bunday № topilmadi. /ishchilar")
-    db.audit(u["tg_id"], "salary_set", f"{eid} {sal}")
-    await update.message.reply_text(f"✅ №{eid} oyligi: {som(sal)}")
+    words = ctx.args
+    if not words:  # ro'yxatdan tanlash
+        emps = db.employees()
+        if not emps:
+            return await update.message.reply_text("Avval ishchi qo'shing: /ishchi_qosh Ibrat")
+        kb = [[InlineKeyboardButton(f"{e['name']} — {som(e['salary']) if e['salary'] else "oylik yo'q"}",
+                                    callback_data=f"sal:{e['id']}")] for e in emps]
+        return await update.message.reply_text("Kimning oyligini belgilaysiz?", reply_markup=InlineKeyboardMarkup(kb))
+    # "/oylik 3 4500000" (raqam bilan) yoki "/oylik Jahongir 6 000 000" (ism bilan)
+    i = next((n for n, w in enumerate(words) if w[:1].isdigit() and n > 0), None)
+    if words[0].isdigit() and len(words[0]) <= 4 and len(words) > 1:
+        emp, amount = db.get_employee(int(words[0])), " ".join(words[1:])
+    elif i is not None:
+        emp, amount = db.find_employee(" ".join(words[:i])), " ".join(words[i:])
+    else:
+        return await update.message.reply_text(SALARY_HELP)
+    sal = reports.parse_amount(amount)
+    if not emp:
+        return await update.message.reply_text("Bunday ishchi topilmadi. Ro'yxat: /ishchilar\n\n" + SALARY_HELP)
+    if sal is None:
+        return await update.message.reply_text(SALARY_HELP)
+    await apply_salary(update.message, u, emp, sal)
 
 
 @owner_only
@@ -661,6 +688,7 @@ async def income_step(update: Update, ctx, u, st: dict, text: str):
 
 async def cancel_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.pop("sale", None)
+    ctx.user_data.pop("salary_for", None)
     await update.message.reply_text("Bekor qilindi.")
 
 
@@ -701,6 +729,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     text = update.message.text.strip()
+    if text in (B_EXP, B_INC):
+        ctx.user_data.pop("salary_for", None)
     if text == B_EXP:
         ctx.user_data.pop("sale", None)
         return await update.message.reply_text(EXP_PROMPT, parse_mode=HTML)
@@ -710,6 +740,16 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     st = ctx.user_data.get("sale")
     if st:
         return await income_step(update, ctx, u, st, text)
+    if text in (O_TODAY, O_WEEK, O_MONTH, O_XLSX, O_STAFF, O_ADMIN):
+        ctx.user_data.pop("salary_for", None)
+    if u["role"] == "owner" and ctx.user_data.get("salary_for"):
+        eid = ctx.user_data["salary_for"]
+        sal = reports.parse_amount(text)
+        emp = db.get_employee(eid)
+        if sal is None or not emp:
+            return await update.message.reply_text("Faqat summani yozing, masalan 6000000. Bekor qilish: /bekor")
+        ctx.user_data.pop("salary_for", None)
+        return await apply_salary(update.message, u, emp, sal)
     if u["role"] == "cashier":
         if reports.parse_amount(text) is not None:
             return await update.message.reply_text(
@@ -794,6 +834,18 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.answer()
         await q.edit_message_reply_markup(None)
         return await start_income(q.message, ctx, u, int(parts[1]), business_today())
+
+    if action == "sal":  # sal:<employee_id> — oylik summasini kutamiz
+        if u["role"] != "owner":
+            return await q.answer("Ruxsat yo'q", show_alert=True)
+        emp = db.get_employee(int(parts[1]))
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not emp:
+            return await q.message.reply_text("Ishchi topilmadi.")
+        ctx.user_data.pop("sale", None)
+        ctx.user_data["salary_for"] = emp["id"]
+        return await q.message.reply_text(f"{emp['name']} oyligini yozing (masalan 6000000):")
 
     if action == "inv":  # inv:<point_id>
         await q.answer()
