@@ -314,8 +314,13 @@ def excel_report(start: date, end: date, path: str) -> str:
     ws.append(["Ko'rsatkich", "Summa"])
     for label, val in [("Naqd", d.cash), ("Karta", d.card), ("Yandex", d.ya), ("JAMI TUSHUM", d.income), ("", None)]:
         ws.append([label, val])
+    workers = [r for r in employee_payments(start, end) if r["paid"] or r["salary"]]
     for key, name in CATEGORIES.items():
         ws.append([name, cats.get(key, 0)])
+        if key == "ishchilar":  # ishchilar summasini ism bo'yicha ochib ko'rsatamiz
+            for r in sorted(workers, key=lambda r: -r["paid"]):
+                left = f"qoldi {r['left']:,}".replace(",", " ") if r["salary"] else ""
+                ws.append([f"   {r['name']}", r["paid"], left])
     ws.append(["JAMI XARAJAT", d.spent])
     ws.append([])
     ws.append(["FOYDA", d.income - d.spent])
