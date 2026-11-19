@@ -91,9 +91,24 @@ def _generate(model: str, contents, thinking: Optional[types.ThinkingConfig]):
     )
 
 
+# Limiti tugagan (429) yoki yo'q (404) modellarni bir muddat chetlab o'tamiz,
+# shunda har xabarda bekorga ularga so'rov yuborilmaydi.
+_resting: dict[str, float] = {}
+
+
+def _rest(model: str, err: Exception) -> None:
+    code = getattr(err, "code", None)
+    if code == 429:
+        _resting[model] = time.monotonic() + 15 * 60
+    elif code == 404:
+        _resting[model] = time.monotonic() + 24 * 3600
+
+
 def _call(contents) -> Parsed:
     last_err = None
-    for model in MODELS:
+    now = time.monotonic()
+    ready = [m for m in MODELS if _resting.get(m, 0) <= now]
+    for model in ready or MODELS:
         t0 = time.monotonic()
         try:
             try:
@@ -110,6 +125,7 @@ def _call(contents) -> Parsed:
             return resp.parsed
         except Exception as e:  # band, limit, timeout — keyingi model
             log.warning("Gemini %s failed (%.1f s): %s", model, time.monotonic() - t0, str(e)[:200])
+            _rest(model, e)
             last_err = e
     raise RuntimeError(f"Hamma Gemini modellari xato berdi: {last_err}")
 

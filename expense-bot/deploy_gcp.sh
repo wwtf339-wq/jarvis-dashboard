@@ -55,7 +55,16 @@ if [ ! -f "$APP/.env" ]; then
       -e "s|^OWNER_IDS=.*|OWNER_IDS=$OWNERS|" \
       "$APP/.env.example" > "$APP/.env"
 else
-  echo "   .env bor, tegilmadi (o'zgartirish: sudo nano $APP/.env)"
+  # kalitlarga tegmaymiz, faqat Gemini modellari ro'yxatini yangilaymiz
+  for KEY in GEMINI_MODEL GEMINI_FALLBACK_MODELS; do
+    NEW=$(grep "^$KEY=" "$APP/.env.example")
+    if grep -q "^$KEY=" "$APP/.env"; then
+      sed -i "s|^$KEY=.*|$NEW|" "$APP/.env"
+    else
+      echo "$NEW" >> "$APP/.env"
+    fi
+  done
+  echo "   .env bor: kalitlar saqlandi, Gemini modellari yangilandi"
 fi
 chmod 600 "$APP/.env"
 
