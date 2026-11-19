@@ -403,12 +403,20 @@ def ai_context():
     return [p["name"] for p in db.points()], [e["name"] for e in db.employees()]
 
 
+async def _drop(msg):
+    """"⏳" xabarini o'chiradi (o'chmasa — muhim emas)."""
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+
+
 async def expense_voice(update: Update, ctx, u):
     msg = update.message
     media = msg.voice or msg.audio
     if media.duration and media.duration > 300:
         return await msg.reply_text("Ovoz 5 daqiqadan qisqa bo'lsin.")
-    await msg.chat.send_action("typing")
+    wait = await msg.reply_text("⏳ Eshityapman...")
     try:
         f = await media.get_file()
         data = bytes(await f.download_as_bytearray())
@@ -416,18 +424,22 @@ async def expense_voice(update: Update, ctx, u):
         parsed = await ai.parse_voice(data, mime, *ai_context())
     except Exception:
         log.exception("voice parse failed")
+        await _drop(wait)
         return await msg.reply_text("Ovozni o'qiy olmadim (Gemini xatosi yoki kunlik limit tugadi). "
                                     "Birozdan so'ng qayta yuboring yoki matn qilib yozing.")
+    await _drop(wait)
     await handle_parsed(msg, ctx, u, parsed)
 
 
 async def expense_text(update: Update, ctx, u, text: str):
-    await update.message.chat.send_action("typing")
+    wait = await update.message.reply_text("⏳ O'qiyapman...")
     try:
         parsed = await ai.parse_text(text, *ai_context())
     except Exception:
         log.exception("text parse failed")
+        await _drop(wait)
         return await update.message.reply_text("Tushunmadim yoki Gemini javob bermadi. Qayta yozib ko'ring.")
+    await _drop(wait)
     await handle_parsed(update.message, ctx, u, parsed)
 
 

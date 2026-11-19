@@ -1,8 +1,10 @@
 """Gemini orqali xo'jayinning ovozi/matnidan xarajat va Yandex tushumlarini ajratish."""
 import asyncio
+import time
 from typing import Literal, Optional
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
 
@@ -11,8 +13,8 @@ import logging
 from config import GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL
 
 log = logging.getLogger("expense-bot.ai")
-# 45 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
-client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=45_000))
+# 25 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
+client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=25_000))
 MODELS = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
 
 PROMPT = """Sen fast-fud biznesining hisobchisisan. Xo'jayin yoki xodim o'zbek (lotin yoki kirill, ba'zan rus)
@@ -68,24 +70,46 @@ def _context(point_names: list[str], employee_names: list[str]) -> str:
             "Ishchi ismi ro'yxatdagiga o'xshasa, ro'yxatdagidek yoz (masalan 'Ibratga' -> 'Ibrat').\n")
 
 
+def _thinking(model: str) -> Optional[types.ThinkingConfig]:
+    """Xarajat ajratish oddiy ish — modelning "o'ylash" bosqichini o'chirib, javobni tezlatamiz.
+    Gemini 2.x da thinking_budget=0, Gemini 3+ da thinking_level=MINIMAL ishlaydi."""
+    if "2.5" in model or "2.0" in model:
+        return types.ThinkingConfig(thinking_budget=0)
+    return types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+
+
+def _generate(model: str, contents, thinking: Optional[types.ThinkingConfig]):
+    return client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=Parsed,
+            temperature=0,
+            thinking_config=thinking,
+        ),
+    )
+
+
 def _call(contents) -> Parsed:
     last_err = None
     for model in MODELS:
+        t0 = time.monotonic()
         try:
-            resp = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=Parsed,
-                    temperature=0,
-                ),
-            )
+            try:
+                resp = _generate(model, contents, _thinking(model))
+            except genai_errors.ClientError as e:
+                # model bu thinking sozlamasini qabul qilmasa — sozlamasiz qayta urinamiz
+                if e.code != 400:
+                    raise
+                log.info("Gemini %s: thinking sozlamasi qabul qilinmadi, sozlamasiz", model)
+                resp = _generate(model, contents, None)
             if resp.parsed is None:
                 raise ValueError(f"tushunarsiz javob: {resp.text!r}")
+            log.info("Gemini %s javob berdi: %.1f s", model, time.monotonic() - t0)
             return resp.parsed
         except Exception as e:  # band, limit, timeout — keyingi model
-            log.warning("Gemini %s failed: %s", model, str(e)[:200])
+            log.warning("Gemini %s failed (%.1f s): %s", model, time.monotonic() - t0, str(e)[:200])
             last_err = e
     raise RuntimeError(f"Hamma Gemini modellari xato berdi: {last_err}")
 
