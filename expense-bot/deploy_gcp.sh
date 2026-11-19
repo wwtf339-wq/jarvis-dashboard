@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Botni Google Cloud (Ubuntu) serveriga o'rnatadi yoki yangilaydi.
+# Botni Google Cloud (Debian/Ubuntu) serveriga o'rnatadi yoki yangilaydi.
 #
 # Birinchi marta (SSH oynasida):
-#   wget -qO setup.sh https://raw.githubusercontent.com/wwtf339-wq/jarvis-dashboard/claude/telegram-expense-tracking-bot-kmd0y7/expense-bot/deploy_gcp.sh
+#   curl -fsSL -o setup.sh https://raw.githubusercontent.com/wwtf339-wq/jarvis-dashboard/claude/telegram-expense-tracking-bot-kmd0y7/expense-bot/deploy_gcp.sh
 #   sudo bash setup.sh
 #
 # Keyin kod yangilanganda xuddi shu ikki buyruqni qayta bering:

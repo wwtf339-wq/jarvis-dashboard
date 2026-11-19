@@ -106,7 +106,7 @@ Server olinadi, kodni `/opt/expense-bot` ga tashlanadi, `.venv` o'rnatiladi, key
    - Name: `expense-bot`
    - Region: **us-central1** (yoki `us-west1`, `us-east1`; faqat shular bepul)
    - Machine type: **e2-micro**
-   - Boot disk → **Change**: Ubuntu 24.04 LTS, disk turi **Standard persistent disk**, hajmi **30 GB**
+   - Boot disk → **Change**: Debian GNU/Linux 13 (trixie), x86/64, disk turi **Standard persistent disk**, hajmi **30 GB**
    - Qolganiga tegmang. Statik IP **olmang** (pulli).
 3. **Create** → 1 daqiqada server tayyor.
 
@@ -114,7 +114,7 @@ Server olinadi, kodni `/opt/expense-bot` ga tashlanadi, `.venv` o'rnatiladi, key
 1. Server qatoridagi **SSH** tugmasini bosing, brauzerda qora oyna ochiladi.
 2. Shu ikki buyruqni kiriting:
    ```bash
-   wget -qO setup.sh https://raw.githubusercontent.com/wwtf339-wq/jarvis-dashboard/claude/telegram-expense-tracking-bot-kmd0y7/expense-bot/deploy_gcp.sh
+   curl -fsSL -o setup.sh https://raw.githubusercontent.com/wwtf339-wq/jarvis-dashboard/claude/telegram-expense-tracking-bot-kmd0y7/expense-bot/deploy_gcp.sh
    sudo bash setup.sh
    ```
 3. Skript 3 ta narsani so'raydi: bot tokeni, Gemini kaliti, xo'jayin Telegram ID. Kiriting.
