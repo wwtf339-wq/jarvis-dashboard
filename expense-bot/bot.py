@@ -283,8 +283,20 @@ async def staff_cmd(update, ctx, u):
     emps = db.employees()
     if not emps:
         return await update.message.reply_text("Xodim yo'q.\n" + ADD_EMP_HELP)
-    lines = [f"№{e['id']} <b>{escape(e['name'])}</b> — {escape(db.point_name(e['point_id']))}, "
-             + (f"oylik {som(e['salary'])}" if e['salary'] else "oylik belgilanmagan") for e in emps]
+    today = business_today()
+    start, _ = reports.month_range(today.year, today.month)
+    paid = {r["name"].lower(): r["paid"] for r in reports.employee_payments(start, today)}
+    lines = [f"👥 <b>Xodimlar</b> — {reports.MONTHS[today.month]} oyi holati\n"]
+    for e in emps:
+        got = paid.get(e["name"].lower(), 0)
+        line = f"№{e['id']} <b>{escape(e['name'])}</b> — {escape(db.point_name(e['point_id']))}\n"
+        if e["salary"]:
+            left = e["salary"] - got
+            rest = f"qoldi {som(left)}" if left >= 0 else f"⚠️ ortiqcha olgan {som(-left)}"
+            line += f"   oylik {som(e['salary'])} · oldi {som(got)} · {rest}"
+        else:
+            line += f"   oylik belgilanmagan · bu oy oldi {som(got)}"
+        lines.append(line)
     lines.append("\nOylikni o'zgartirish: /oylik № Summa\nBo'shatish: /boshat №")
     await update.message.reply_text("\n".join(lines), parse_mode=HTML)
 

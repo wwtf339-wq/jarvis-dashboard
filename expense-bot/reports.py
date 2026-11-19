@@ -251,7 +251,10 @@ def salary_block(start: date, end: date) -> str | None:
     for r in rows:
         tag = " (bo'shagan)" if not r["active"] else (" (ro'yxatda yo'q)" if r["point"] == "?" else "")
         lines.append((r["name"] + tag)[:W])
-        lines.append(f"  {k(r['salary'])} oylik, {k(r['paid'])} oldi")
+        if r["salary"]:
+            lines.append(f"  {k(r['salary'])} oylik, {k(r['paid'])} oldi")
+        else:
+            lines.append(f"  oylik yo'q, {k(r['paid'])} oldi" if r["paid"] else "  oylik yo'q, olmagan")
         if r["salary"]:
             lines.append(f"  qoldi: {k(r['left'])}" if r["left"] >= 0 else f"  ortiqcha: {k(-r['left'])}")
     return "<b>Ishchilar oyligi</b>\n" + pre(lines)
