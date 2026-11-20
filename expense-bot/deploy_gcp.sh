@@ -56,7 +56,7 @@ if [ ! -f "$APP/.env" ]; then
       "$APP/.env.example" > "$APP/.env"
 else
   # kalitlarga tegmaymiz, faqat Gemini modellari ro'yxatini yangilaymiz
-  for KEY in GEMINI_MODEL GEMINI_FALLBACK_MODELS GEMINI_PAID_MODELS; do
+  for KEY in GEMINI_MODEL GEMINI_FALLBACK_MODELS GEMINI_PAID_MODELS GEMINI_VOICE_MODELS; do
     NEW=$(grep "^$KEY=" "$APP/.env.example")
     if grep -q "^$KEY=" "$APP/.env"; then
       sed -i "s|^$KEY=.*|$NEW|" "$APP/.env"
@@ -65,8 +65,10 @@ else
     fi
   done
   # pullik zaxira kaliti (ixtiyoriy) — faqat bir marta so'raladi
-  if ! grep -q "^GEMINI_PAID_API_KEY=" "$APP/.env"; then
-    read -rp "Pullik Gemini kaliti (yo'q bo'lsa shunchaki Enter): " PAIDKEY < /dev/tty
+  # bo'sh bo'lsa har yangilanishda so'raydi (Enter — o'tkazib yuborish)
+  if ! grep -q "^GEMINI_PAID_API_KEY=." "$APP/.env"; then
+    read -rp "Pullik Gemini kaliti (ovozli xabarlar uchun; yo'q bo'lsa shunchaki Enter): " PAIDKEY < /dev/tty
+    sed -i "/^GEMINI_PAID_API_KEY=/d" "$APP/.env"
     echo "GEMINI_PAID_API_KEY=$PAIDKEY" >> "$APP/.env"
   fi
   echo "   .env bor: kalitlar saqlandi, Gemini modellari yangilandi"

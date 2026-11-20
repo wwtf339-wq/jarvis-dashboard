@@ -228,7 +228,11 @@ Yandex puli haftada bir marta hisob raqamga tushadi. Bot uni **pul tushgan kunga
 
 **Bepul kalit (`GEMINI_API_KEY`).** Bepul tarifda har bir modelga kuniga taxminan 20 so'rov beriladi. Bot faqat tez modellarni navbat bilan ishlatadi: `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-2.5-flash-lite` → `gemini-3.6-flash`. Band (503), qotgan (504) yoki limiti tugagan (429) model 10–15 daqiqaga chetga qo'yiladi.
 
-**Pullik zaxira (`GEMINI_PAID_API_KEY`, ixtiyoriy).** Bepul modellarning hammasi limitga tushsa yoki band bo'lsa, bot avtomatik pullik kalitga o'tadi va o'sha kuni xo'jayinga bir marta xabar beradi. Kalitni olish:
+**Pullik kalit (`GEMINI_PAID_API_KEY`, ixtiyoriy).** Qo'yilsa:
+- **ovozli xabarlar** to'g'ridan-to'g'ri pullik kalitda `gemini-3.5-flash` bilan ishlaydi (band bo'lsa `gemini-3.5-flash-lite`, u ham ishlamasa bepul modellar). Kuniga 10–15 ta ovoz uchun oyiga taxminan $0.5–1;
+- **matnlar** avvalgidek bepul: bot o'zi yoki bepul kalit. Bepul limit tugagandagina pullik kalitga o'tadi va o'sha kuni xo'jayinga bir marta xabar beradi.
+
+Kalitni olish:
 1. https://aistudio.google.com/apikey → **Create API key** → **yangi loyiha** yarating (masalan `expense-bot-paid`). Bepul kalit turgan loyihani ishlatmang: billing ulangan loyihadagi hamma so'rov pullik bo'ladi.
 2. Shu kalit qatorida **Set up billing** → to'lov hisobini ulang.
 3. Google Cloud → Billing → **Budgets & alerts** da oyiga $5 lik ogohlantirish qo'ying.

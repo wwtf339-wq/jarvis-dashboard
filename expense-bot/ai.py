@@ -11,7 +11,7 @@ from pydantic import BaseModel
 import logging
 
 from config import (GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GEMINI_PAID_API_KEY,
-                    GEMINI_PAID_MODELS)
+                    GEMINI_PAID_MODELS, GEMINI_VOICE_MODELS)
 
 log = logging.getLogger("expense-bot.ai")
 # 15 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
@@ -20,6 +20,7 @@ client = genai.Client(api_key=GEMINI_API_KEY, http_options=_http)
 paid_client = genai.Client(api_key=GEMINI_PAID_API_KEY, http_options=_http) if GEMINI_PAID_API_KEY else None
 MODELS = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
 PAID_MODELS = GEMINI_PAID_MODELS if paid_client else []
+VOICE_MODELS = GEMINI_VOICE_MODELS if paid_client else []
 
 # Pullik rejim statistikasi: {sana: so'rovlar soni}. Bot kuniga bir marta xo'jayinga xabar beradi.
 paid_calls: dict[str, int] = {}
@@ -114,22 +115,27 @@ def _rest(model: str, err: Exception) -> None:
         _resting[model] = time.monotonic() + 10 * 60   # band yoki qotgan — 10 daqiqa tegmaymiz
 
 
-def _routes():
-    """(pullikmi, model) navbati: avval bepul tez modellar, keyin pullik zaxira."""
+def _routes(kind: str):
+    """(pullikmi, model) navbati.
+    voice: pullik kalit bo'lsa avval pullik Gemini 3.5, u ishlamasa bepul modellar.
+    text:  avval bepul tez modellar, limit tugasa pullik zaxira."""
     now = time.monotonic()
     free = [(False, m) for m in MODELS]
-    paid = [(True, m) for m in PAID_MODELS]
-    ready = [r for r in free + paid if _resting.get(_tag(*r), 0) <= now]
-    return ready or free + paid
+    if kind == "voice":
+        order = [(True, m) for m in VOICE_MODELS] + free
+    else:
+        order = free + [(True, m) for m in PAID_MODELS]
+    ready = [r for r in order if _resting.get(_tag(*r), 0) <= now]
+    return ready or order
 
 
 def _tag(paid: bool, model: str) -> str:
     return ("paid:" if paid else "") + model
 
 
-def _call(contents) -> Parsed:
+def _call(contents, kind: str = "text") -> Parsed:
     last_err = None
-    for paid, model in _routes():
+    for paid, model in _routes(kind):
         tag = _tag(paid, model)
         t0 = time.monotonic()
         try:
@@ -144,7 +150,7 @@ def _call(contents) -> Parsed:
             if resp.parsed is None:
                 raise ValueError(f"tushunarsiz javob: {resp.text!r}")
             log.info("Gemini %s javob berdi: %.1f s", tag, time.monotonic() - t0)
-            if paid:
+            if paid and kind == "text":  # matn pullikka tushdi — bepul limit tugagan
                 day = time.strftime("%Y-%m-%d")
                 paid_calls[day] = paid_calls.get(day, 0) + 1
             return resp.parsed
@@ -157,7 +163,7 @@ def _call(contents) -> Parsed:
 
 async def parse_voice(audio: bytes, mime: str, point_names: list[str], employee_names: list[str]) -> Parsed:
     part = types.Part.from_bytes(data=audio, mime_type=mime)
-    return await asyncio.to_thread(_call, [part, PROMPT + _context(point_names, employee_names)])
+    return await asyncio.to_thread(_call, [part, PROMPT + _context(point_names, employee_names)], "voice")
 
 
 async def parse_text(text: str, point_names: list[str], employee_names: list[str]) -> Parsed:

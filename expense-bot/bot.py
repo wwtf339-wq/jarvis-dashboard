@@ -479,7 +479,7 @@ async def paid_notice(ctx):
     day = time.strftime("%Y-%m-%d")
     if ai.paid_calls.get(day) and ctx.bot_data.get("paid_noticed") != day:
         ctx.bot_data["paid_noticed"] = day
-        await notify_owners(ctx, "ℹ️ Bugun bepul Gemini limiti tugadi — bot avtomatik pullik kalitga o'tdi. "
+        await notify_owners(ctx, "ℹ️ Bugun matnlar uchun bepul Gemini limiti tugadi — bot avtomatik pullik kalitga o'tdi. "
                                  "Har bir xabar uchun juda kichik summa yechiladi.")
 
 

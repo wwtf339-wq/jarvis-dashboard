@@ -33,6 +33,9 @@ GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv(
 GEMINI_PAID_API_KEY = os.getenv("GEMINI_PAID_API_KEY", "").strip()
 GEMINI_PAID_MODELS = [m.strip() for m in os.getenv(
     "GEMINI_PAID_MODELS", "gemini-3.1-flash-lite,gemini-3.5-flash-lite").split(",") if m.strip()]
+# Ovozli xabarlar pullik kalit bo'lsa to'g'ridan-to'g'ri shu modellarda ishlaydi (tez va barqaror).
+GEMINI_VOICE_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_VOICE_MODELS", "gemini-3.5-flash,gemini-3.5-flash-lite").split(",") if m.strip()]
 
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent"))
 DB_PATH = os.getenv("DB_PATH", "expenses.db")
