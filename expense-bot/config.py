@@ -32,7 +32,7 @@ GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv(
 # bot avtomatik shu kalit bilan ishlaydi. Bo'sh qolsa — faqat bepul rejim.
 GEMINI_PAID_API_KEY = os.getenv("GEMINI_PAID_API_KEY", "").strip()
 GEMINI_PAID_MODELS = [m.strip() for m in os.getenv(
-    "GEMINI_PAID_MODELS", "gemini-3.5-flash-lite,gemini-3.1-flash-lite").split(",") if m.strip()]
+    "GEMINI_PAID_MODELS", "gemini-3.1-flash-lite,gemini-3.5-flash-lite").split(",") if m.strip()]
 
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent"))
 DB_PATH = os.getenv("DB_PATH", "expenses.db")
