@@ -300,6 +300,19 @@ def digest(day: date) -> str:
 
 # ---------- Excel ----------
 
+def items_breakdown(rows, category: str) -> list[tuple[str, int, int]]:
+    """Bir xil nomli xaridlarni birlashtiradi: (nomi, jami summa, necha marta), kattasidan kichigiga."""
+    total, times, label = defaultdict(int), defaultdict(int), {}
+    for r in rows:
+        if r["category"] != category:
+            continue
+        key = (r["item"] or "—").strip().lower()
+        label.setdefault(key, (r["item"] or "—").strip())
+        total[key] += r["amount"]
+        times[key] += 1
+    return sorted(((label[k], total[k], times[k]) for k in total), key=lambda x: -x[1])
+
+
 def excel_report(start: date, end: date, path: str) -> str:
     d = collect(start, end)
     pts = {p["id"]: p["name"] for p in db.points(active_only=False)}
@@ -318,6 +331,9 @@ def excel_report(start: date, end: date, path: str) -> str:
     workers = [r for r in employee_payments(start, end) if r["paid"] or r["salary"]]
     for key, name in CATEGORIES.items():
         ws.append([name, cats.get(key, 0)])
+        if key == "bozorlik":  # bozorlikni mahsulot nomi bo'yicha ochib ko'rsatamiz
+            for nm, total, times in items_breakdown(d.expenses, "bozorlik"):
+                ws.append([f"   {nm}", total, f"{times} marta" if times > 1 else ""])
         if key == "ishchilar":  # ishchilar summasini ism bo'yicha ochib ko'rsatamiz
             for r in sorted(workers, key=lambda r: -r["paid"]):
                 left = f"qoldi {r['left']:,}".replace(",", " ") if r["salary"] else ""
