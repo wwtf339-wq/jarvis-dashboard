@@ -10,12 +10,19 @@ from pydantic import BaseModel
 
 import logging
 
-from config import GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL
+from config import (GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GEMINI_PAID_API_KEY,
+                    GEMINI_PAID_MODELS)
 
 log = logging.getLogger("expense-bot.ai")
 # 15 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
-client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=15_000))
+_http = types.HttpOptions(timeout=15_000)
+client = genai.Client(api_key=GEMINI_API_KEY, http_options=_http)
+paid_client = genai.Client(api_key=GEMINI_PAID_API_KEY, http_options=_http) if GEMINI_PAID_API_KEY else None
 MODELS = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
+PAID_MODELS = GEMINI_PAID_MODELS if paid_client else []
+
+# Pullik rejim statistikasi: {sana: so'rovlar soni}. Bot kuniga bir marta xo'jayinga xabar beradi.
+paid_calls: dict[str, int] = {}
 
 PROMPT = """Sen fast-fud biznesining hisobchisisan. Xo'jayin yoki xodim o'zbek (lotin yoki kirill, ba'zan rus)
 tilida xarajatlar va tushumlarni aytadi yoki yozadi. Ovoz yoki matndan har birini alohida qator qilib ajrat.
@@ -78,8 +85,8 @@ def _thinking(model: str) -> Optional[types.ThinkingConfig]:
     return types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
 
 
-def _generate(model: str, contents, thinking: Optional[types.ThinkingConfig]):
-    return client.models.generate_content(
+def _generate(model: str, contents, thinking: Optional[types.ThinkingConfig], paid: bool = False):
+    return (paid_client if paid else client).models.generate_content(
         model=model,
         contents=contents,
         config=types.GenerateContentConfig(
@@ -107,28 +114,43 @@ def _rest(model: str, err: Exception) -> None:
         _resting[model] = time.monotonic() + 10 * 60   # band yoki qotgan — 10 daqiqa tegmaymiz
 
 
+def _routes():
+    """(pullikmi, model) navbati: avval bepul tez modellar, keyin pullik zaxira."""
+    now = time.monotonic()
+    free = [(False, m) for m in MODELS]
+    paid = [(True, m) for m in PAID_MODELS]
+    ready = [r for r in free + paid if _resting.get(_tag(*r), 0) <= now]
+    return ready or free + paid
+
+
+def _tag(paid: bool, model: str) -> str:
+    return ("paid:" if paid else "") + model
+
+
 def _call(contents) -> Parsed:
     last_err = None
-    now = time.monotonic()
-    ready = [m for m in MODELS if _resting.get(m, 0) <= now]
-    for model in ready or MODELS:
+    for paid, model in _routes():
+        tag = _tag(paid, model)
         t0 = time.monotonic()
         try:
             try:
-                resp = _generate(model, contents, _thinking(model))
+                resp = _generate(model, contents, _thinking(model), paid)
             except genai_errors.ClientError as e:
                 # model bu thinking sozlamasini qabul qilmasa — sozlamasiz qayta urinamiz
                 if e.code != 400:
                     raise
-                log.info("Gemini %s: thinking sozlamasi qabul qilinmadi, sozlamasiz", model)
-                resp = _generate(model, contents, None)
+                log.info("Gemini %s: thinking sozlamasi qabul qilinmadi, sozlamasiz", tag)
+                resp = _generate(model, contents, None, paid)
             if resp.parsed is None:
                 raise ValueError(f"tushunarsiz javob: {resp.text!r}")
-            log.info("Gemini %s javob berdi: %.1f s", model, time.monotonic() - t0)
+            log.info("Gemini %s javob berdi: %.1f s", tag, time.monotonic() - t0)
+            if paid:
+                day = time.strftime("%Y-%m-%d")
+                paid_calls[day] = paid_calls.get(day, 0) + 1
             return resp.parsed
         except Exception as e:  # band, limit, timeout — keyingi model
-            log.warning("Gemini %s failed (%.1f s): %s", model, time.monotonic() - t0, str(e)[:200])
-            _rest(model, e)
+            log.warning("Gemini %s failed (%.1f s): %s", tag, time.monotonic() - t0, str(e)[:200])
+            _rest(tag, e)
             last_err = e
     raise RuntimeError(f"Hamma Gemini modellari xato berdi: {last_err}")
 

@@ -22,10 +22,17 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 # Asosiy model. AI Studio'dagi ro'yxatdan istalgan Flash modelini yozish mumkin.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-# Asosiy model band bo'lsa (503/429) yoki javob bermasa, navbat bilan shular sinab ko'riladi
+# Bepul kalit: asosiy model band bo'lsa (503/429) yoki javob bermasa, navbat bilan shular sinab ko'riladi.
+# Faqat tez modellar qoldirilgan (3.8/3.7/3.5-flash/2.5-flash sekin yoki tez-tez band bo'ldi).
 GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv(
     "GEMINI_FALLBACK_MODELS",
-    "gemini-3.6-flash,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash,gemini-2.5-flash-lite,gemini-2.5-flash").split(",") if m.strip()]
+    "gemini-3.1-flash-lite,gemini-2.5-flash-lite,gemini-3.6-flash").split(",") if m.strip()]
+
+# Pullik kalit (ixtiyoriy). Bepul modellarning hammasi limitga tushsa yoki band bo'lsa,
+# bot avtomatik shu kalit bilan ishlaydi. Bo'sh qolsa — faqat bepul rejim.
+GEMINI_PAID_API_KEY = os.getenv("GEMINI_PAID_API_KEY", "").strip()
+GEMINI_PAID_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_PAID_MODELS", "gemini-3.5-flash-lite,gemini-3.1-flash-lite").split(",") if m.strip()]
 
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent"))
 DB_PATH = os.getenv("DB_PATH", "expenses.db")

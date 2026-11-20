@@ -224,10 +224,19 @@ Yandex puli haftada bir marta hisob raqamga tushadi. Bot uni **pul tushgan kunga
 
 ## 8. Gemini modeli
 
-- `.env` da `GEMINI_MODEL=gemini-flash-latest` turibdi. Bu Google'ning rasmiy taxallusi. Google uni har doim eng yangi Flash modeliga ulaydi va almashtirishdan oldin 2 hafta oldin xabar beradi.
-- **«Hydrogen» haqida:** bu hozircha testerlar orasida yurgan norasmiy nom. Google uni API'da hali e'lon qilmagan. Aytishlaricha, u keyingi Flash modeli bo'ladi. Shunday bo'lsa, `gemini-flash-latest` chiqqanda o'zi o'sha modelga o'tadi va hech narsani o'zgartirish kerak bo'lmaydi.
-- Aniq bir versiyada qotirish uchun AI Studio'dagi model ro'yxatidan nomni olib, `GEMINI_MODEL` ga yozing.
-- **Maxfiylik:** Gemini API'ning bepul tarifida Google yuborilgan ma'lumotlarni o'z xizmatlarini yaxshilash uchun ishlatishi mumkin. Bu yerda faqat xarajat ovozlari yuboriladi, kassirlarning savdo raqamlari Gemini'ga bormaydi. Buni ham istamasangiz, AI Studio'da billing'ni yoqish mumkin. Pulli tarifda ma'lumot o'qitish uchun ishlatilmaydi, narxi esa bunday hajmda arzimas.
+**Tez yo'l (Gemini'siz).** `benzin 50000`, `pomidor 100 ming, bodring 45000`, `Umid 700 ming oldi` kabi oddiy matnlarni bot o'zi bir zumda tushunadi. Gemini faqat ovozli xabar, kirill yozuv, `kecha ...`, `10 kg ...` kabi murakkab xabarlar uchun ishlatiladi.
+
+**Bepul kalit (`GEMINI_API_KEY`).** Bepul tarifda har bir modelga kuniga taxminan 20 so'rov beriladi. Bot faqat tez modellarni navbat bilan ishlatadi: `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-2.5-flash-lite` → `gemini-3.6-flash`. Band (503), qotgan (504) yoki limiti tugagan (429) model 10–15 daqiqaga chetga qo'yiladi.
+
+**Pullik zaxira (`GEMINI_PAID_API_KEY`, ixtiyoriy).** Bepul modellarning hammasi limitga tushsa yoki band bo'lsa, bot avtomatik pullik kalitga o'tadi va o'sha kuni xo'jayinga bir marta xabar beradi. Kalitni olish:
+1. https://aistudio.google.com/apikey → **Create API key** → **yangi loyiha** yarating (masalan `expense-bot-paid`). Bepul kalit turgan loyihani ishlatmang: billing ulangan loyihadagi hamma so'rov pullik bo'ladi.
+2. Shu kalit qatorida **Set up billing** → to'lov hisobini ulang.
+3. Google Cloud → Billing → **Budgets & alerts** da oyiga $5 lik ogohlantirish qo'ying.
+4. Serverda: `sudo nano /opt/expense-bot/.env` → `GEMINI_PAID_API_KEY=` qatoriga kalitni qo'ying → saqlang → `sudo systemctl restart expense-bot`.
+
+- Mavjud modellar ro'yxati (limit sarflamaydi): `cd /opt/expense-bot && sudo .venv/bin/python -c "from dotenv import load_dotenv;load_dotenv();import os;from google import genai;c=genai.Client(api_key=os.environ['GEMINI_API_KEY']);[print(m.name) for m in c.models.list() if 'flash' in m.name]"`
+- Qaysi model necha soniyada javob berayotgani: `sudo journalctl -u expense-bot --since "1 hour ago" --no-pager | grep -E "javob berdi|failed" | cut -c1-200`
+- **Maxfiylik:** bepul tarifda Google yuborilgan ma'lumotlarni o'z xizmatlarini yaxshilash uchun ishlatishi mumkin. Gemini'ga faqat xarajat matni/ovozi boradi, kassa raqamlari bormaydi. Pullik tarifda ma'lumot o'qitish uchun ishlatilmaydi.
 
 ---
 

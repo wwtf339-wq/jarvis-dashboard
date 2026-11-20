@@ -9,6 +9,7 @@ import re
 import os
 import sqlite3
 import tempfile
+import time
 import uuid
 from datetime import date, timedelta
 from html import escape
@@ -473,6 +474,15 @@ def ai_context():
     return [p["name"] for p in db.points()], [e["name"] for e in db.employees()]
 
 
+async def paid_notice(ctx):
+    """Pullik Gemini kaliti ishlatilgan kuni xo'jayinlarga bir marta xabar beradi."""
+    day = time.strftime("%Y-%m-%d")
+    if ai.paid_calls.get(day) and ctx.bot_data.get("paid_noticed") != day:
+        ctx.bot_data["paid_noticed"] = day
+        await notify_owners(ctx, "ℹ️ Bugun bepul Gemini limiti tugadi — bot avtomatik pullik kalitga o'tdi. "
+                                 "Har bir xabar uchun juda kichik summa yechiladi.")
+
+
 async def _drop(msg):
     """"⏳" xabarini o'chiradi (o'chmasa — muhim emas)."""
     try:
@@ -492,6 +502,7 @@ async def expense_voice(update: Update, ctx, u):
         data = bytes(await f.download_as_bytearray())
         mime = "audio/ogg" if msg.voice else (media.mime_type or "audio/mpeg")
         parsed = await ai.parse_voice(data, mime, *ai_context())
+        await paid_notice(ctx)
     except Exception:
         log.exception("voice parse failed")
         await _drop(wait)
@@ -512,6 +523,7 @@ async def expense_text(update: Update, ctx, u, text: str):
     wait = await update.message.reply_text("⏳ O'qiyapman...")
     try:
         parsed = await ai.parse_text(text, *ai_context())
+        await paid_notice(ctx)
     except Exception:
         log.exception("text parse failed")
         await _drop(wait)
