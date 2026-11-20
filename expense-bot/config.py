@@ -21,11 +21,11 @@ def _time(name: str, default: str) -> tuple[int, int]:
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 # Asosiy model. AI Studio'dagi ro'yxatdan istalgan Flash modelini yozish mumkin.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 # Asosiy model band bo'lsa (503/429) yoki javob bermasa, navbat bilan shular sinab ko'riladi
 GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv(
     "GEMINI_FALLBACK_MODELS",
-    "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite").split(",") if m.strip()]
+    "gemini-3.6-flash,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash,gemini-2.5-flash-lite,gemini-2.5-flash").split(",") if m.strip()]
 
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Asia/Tashkent"))
 DB_PATH = os.getenv("DB_PATH", "expenses.db")

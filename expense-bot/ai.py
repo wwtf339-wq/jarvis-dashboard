@@ -13,8 +13,8 @@ import logging
 from config import GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL
 
 log = logging.getLogger("expense-bot.ai")
-# 25 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
-client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=25_000))
+# 15 soniya kutib, javob bo'lmasa keyingi modelga o'tadi
+client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=15_000))
 MODELS = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
 
 PROMPT = """Sen fast-fud biznesining hisobchisisan. Xo'jayin yoki xodim o'zbek (lotin yoki kirill, ba'zan rus)
@@ -98,10 +98,13 @@ _resting: dict[str, float] = {}
 
 def _rest(model: str, err: Exception) -> None:
     code = getattr(err, "code", None)
-    if code == 429:
+    msg = str(err)
+    if code == 429:          # limit tugagan
         _resting[model] = time.monotonic() + 15 * 60
-    elif code == 404:
+    elif code == 404:        # bunday model yo'q
         _resting[model] = time.monotonic() + 24 * 3600
+    elif code in (500, 503, 504) or "timed out" in msg.lower() or "deadline" in msg.lower():
+        _resting[model] = time.monotonic() + 10 * 60   # band yoki qotgan — 10 daqiqa tegmaymiz
 
 
 def _call(contents) -> Parsed:

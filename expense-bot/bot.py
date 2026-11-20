@@ -20,6 +20,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, Con
 
 import ai
 import db
+import quick
 import reports
 from config import (BACKUP_TIME, BACKUP_WEEKDAY, BOT_TOKEN, CATEGORIES, DB_PATH, DIGEST_TIME,
                     MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, OWNER_IDS, SALES_REMINDER_TIME, at,
@@ -501,6 +502,13 @@ async def expense_voice(update: Update, ctx, u):
 
 
 async def expense_text(update: Update, ctx, u, text: str):
+    try:  # oddiy matnni Gemini'siz, bir zumda tushunamiz
+        parsed = quick.parse(text, ai_context()[1])
+    except Exception:
+        log.exception("quick parse failed")
+        parsed = None
+    if parsed:
+        return await handle_parsed(update.message, ctx, u, parsed)
     wait = await update.message.reply_text("⏳ O'qiyapman...")
     try:
         parsed = await ai.parse_text(text, *ai_context())
