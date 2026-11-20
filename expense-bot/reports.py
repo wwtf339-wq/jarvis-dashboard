@@ -413,5 +413,11 @@ def excel_report(start: date, end: date, path: str) -> str:
                     c.alignment = Alignment(horizontal="right")
                 if isinstance(first, str) and (first.isupper() and len(first) > 2):
                     c.font = bold
+    # Xulosa: kategoriya sarlavhalari (Bozorlik, Ishchilar...) qalin va kattaroq — ajralib tursin
+    cat_font = Font(bold=True, size=12)
+    for row in wb["Xulosa"].iter_rows():
+        if row[0].value in CATEGORIES.values():
+            for c in row[:2]:
+                c.font = cat_font
     wb.save(path)
     return path
