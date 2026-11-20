@@ -5,6 +5,7 @@ Rollar:
   cashier — tochka kassiri: har kuni naqd va kartaga tushgan savdoni kiritadi.
 """
 import logging
+import re
 import os
 import sqlite3
 import tempfile
@@ -21,7 +22,7 @@ import ai
 import db
 import reports
 from config import (BACKUP_TIME, BACKUP_WEEKDAY, BOT_TOKEN, CATEGORIES, DB_PATH, DIGEST_TIME,
-                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, OWNER_IDS, SALES_REMINDER_TIME, at,
+                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, OWNER_IDS, SALES_REMINDER_TIME, at,
                     business_today)
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
@@ -67,8 +68,8 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 
 💰 <b>Pul</b>
 /yandex Summa [izoh] — Yandex tushumi (/yandex 2400000 3-9 noyabr)
-💰 <b>Kirim</b> tugmasi — tochka kunlik kirimi (naqd/karta)
-/savdo Naqd Karta — tezkor kirim (/savdo kecha 2500000 1800000)
+💰 <b>Kirim</b> tugmasi — smena kirimi (smena → naqd → karta)
+/savdo Naqd Karta — tezkor kirim (/savdo 2-smena 2500000 1800000)
 
 ✏️ <b>Tuzatish</b>
 /oxirgi — oxirgi yozuvlar
@@ -77,7 +78,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 
 CASHIER_HELP = ("Salom! Siz <b>{point}</b> xodimisiz.\n\n"
                 "💸 <b>Xarajat</b> — pul chiqsa (bozorlik, avans, benzin…) ovoz yoki matn bilan yozing.\n"
-                "💰 <b>Kirim</b> — smena oxirida naqd va kartaga tushgan summani yozing. "
+                "💰 <b>Kirim</b> — smena oxirida: smenani tanlang, keyin naqd va karta summasini yozing. "
                 "Xato yozsangiz, qayta kiriting — eskisi almashadi.\n"
                 "Kechasi 05:00 gacha kiritilgan kirim oldingi kunga yoziladi.")
 
@@ -529,10 +530,16 @@ async def owner_sale_cmd(update, ctx, u):
     if args and args[0].lower() in ("kecha", "кеча"):
         day -= timedelta(days=1)
         args = args[1:]
+    shift = 1
+    if args and re.fullmatch(r"(\d)-?smena", args[0].lower()):
+        shift = int(args[0][0])
+        args = args[1:]
     nums = [reports.parse_amount(a) for a in args]
-    if len(nums) != 2 or None in nums:
-        return await update.message.reply_text("Format: /savdo 2500000 1800000  yoki  /savdo kecha 2500000 1800000")
-    item = dict(type="sale", day=day.isoformat(), cash=nums[0], card=nums[1], by=u["tg_id"])
+    if len(nums) != 2 or None in nums or not 1 <= shift <= SHIFTS:
+        return await update.message.reply_text("Format: /savdo 2500000 1800000\n"
+                                               "Smena bilan: /savdo 2-smena 2500000 1800000\n"
+                                               "Kecha uchun: /savdo kecha 1-smena 2500000 1800000")
+    item = dict(type="sale", day=day.isoformat(), shift=shift, cash=nums[0], card=nums[1], by=u["tg_id"])
     pts = db.points()
     if not pts:
         return await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Nomi")
@@ -640,26 +647,42 @@ async def send_excel(message, ref: date):
 
 def sale_preview(item: dict) -> str:
     day = date.fromisoformat(item["day"])
-    lines = [f"🏪 {escape(db.point_name(item['point']))}   📅 {day:%d.%m.%Y}",
+    shift = item.get("shift", 1)
+    lines = [f"🏪 {escape(db.point_name(item['point']))}   🕐 {shift}-smena   📅 {day:%d.%m.%Y}",
              f"💵 Naqd: <b>{som(item['cash'])}</b>",
              f"💳 Karta: <b>{som(item['card'])}</b>",
              f"Jami: <b>{som(item['cash'] + item['card'])}</b>"]
-    old = db.get_sale(day, item["point"])
+    old = db.get_sale(day, item["point"], shift)
     if old:
-        lines.append(f"\n⚠️ Bu kunga oldin yozilgan: naqd {som(old['cash'])}, karta {som(old['card'])} — almashtiriladi.")
+        lines.append(f"\n⚠️ Bu smenaga oldin yozilgan: naqd {som(old['cash'])}, karta {som(old['card'])} — almashtiriladi.")
     return "\n".join(lines)
 
 
-def yesterday_kb():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("📆 Kechagi kun uchun", callback_data="ky")]])
+def shift_kb(day: date, point_id: int):
+    rows = [[InlineKeyboardButton(f"{n}-smena" + (" ✅" if db.get_sale(day, point_id, n) else ""),
+                                  callback_data=f"sh:{n}") for n in range(1, SHIFTS + 1)]]
+    if day == business_today():
+        rows.append([InlineKeyboardButton("📆 Kechagi kun uchun", callback_data="ky")])
+    return InlineKeyboardMarkup(rows)
 
 
 async def start_income(message, ctx, u, point_id, day: date):
-    ctx.user_data["sale"] = dict(day=day.isoformat(), step="cash", point=point_id)
+    head = f"💰 Kirim — 🏪 {escape(db.point_name(point_id))}, 📅 {day:%d.%m.%Y}"
+    if SHIFTS == 1:
+        ctx.user_data["sale"] = dict(day=day.isoformat(), step="cash", point=point_id, shift=1)
+        return await message.reply_text(f"{head}\n\n💵 Naqd:\n(masalan: 3456000)\n\nBekor qilish: /bekor",
+                                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                                             "📆 Kechagi kun uchun", callback_data="ky")]])
+                                         if day == business_today() else None)
+    ctx.user_data["sale"] = dict(day=day.isoformat(), step="shift", point=point_id)
+    await message.reply_text(f"{head}\n\n🕐 Smenani tanlang:", reply_markup=shift_kb(day, point_id))
+
+
+async def ask_cash(message, st: dict):
+    day = date.fromisoformat(st["day"])
     await message.reply_text(
-        f"💰 Kirim — 🏪 {escape(db.point_name(point_id))}, 📅 {day:%d.%m.%Y}\n\n"
-        "💵 Naqd qancha tushdi? (masalan: 2 500 000)\n\nBekor qilish: /bekor",
-        parse_mode=HTML, reply_markup=yesterday_kb() if day == business_today() else None)
+        f"💰 {escape(db.point_name(st['point']))}, {st['shift']}-smena, 📅 {day:%d.%m.%Y}\n\n"
+        "💵 Naqd:\n(masalan: 3456000)\n\nBekor qilish: /bekor")
 
 
 async def income_button(update: Update, ctx, u):
@@ -674,14 +697,18 @@ async def income_button(update: Update, ctx, u):
 
 
 async def income_step(update: Update, ctx, u, st: dict, text: str):
+    if st["step"] == "shift":
+        return await update.message.reply_text("Avval smenani tanlang — yuqoridagi tugmalardan birini bosing.\n"
+                                               "Bekor qilish: /bekor")
     amount = reports.parse_amount(text)
     if amount is None:
-        return await update.message.reply_text("Faqat raqam yozing, masalan: 2 500 000  (bekor: /bekor)")
+        return await update.message.reply_text("Faqat raqam yozing, masalan: 3456000  (bekor: /bekor)")
     if st["step"] == "cash":
         st.update(cash=amount, step="card")
-        return await update.message.reply_text("💳 Kartaga (terminal/Click/Payme) qancha tushdi?")
+        return await update.message.reply_text("💳 Karta:\n(terminal/Click/Payme, masalan: 870000)")
     ctx.user_data.pop("sale", None)
-    item = dict(type="sale", day=st["day"], point=st["point"], cash=st["cash"], card=amount, by=u["tg_id"])
+    item = dict(type="sale", day=st["day"], point=st["point"], shift=st["shift"], cash=st["cash"], card=amount,
+                by=u["tg_id"])
     key = stash(ctx, item)
     await update.message.reply_text(sale_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
 
@@ -694,11 +721,12 @@ async def cancel_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def save_sale(ctx, item: dict):
     day = date.fromisoformat(item["day"])
-    db.upsert_sale(day, item["point"], item["cash"], item["card"], item["by"])
-    db.audit(item["by"], "sale", f"{item['point']} {item['day']} {item['cash']} {item['card']}")
+    shift = item.get("shift", 1)
+    db.upsert_sale(day, item["point"], item["cash"], item["card"], item["by"], shift)
+    db.audit(item["by"], "sale", f"{item['point']} {item['day']} s{shift} {item['cash']} {item['card']}")
     if NOTIFY_OWNERS_ON_SALES:
         by = db.get_user(item["by"])
-        text = (f"💰 Kirim: {escape(db.point_name(item['point']))}, {day:%d.%m}: naqd {som(item['cash'])}, "
+        text = (f"💰 Kirim: {escape(db.point_name(item['point']))}, {shift}-smena, {day:%d.%m}: naqd {som(item['cash'])}, "
                 f"karta {som(item['card'])}, jami <b>{som(item['cash'] + item['card'])}</b>"
                 f"\n<i>kiritdi: {escape((by['name'] if by else None) or str(item['by']))}</i>")
         await notify_owners(ctx, text, skip=item["by"])
@@ -818,6 +846,15 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await finish_employee(q.message, item)
         preview = exp_preview(item) if item["type"] == "exp" else sale_preview(item)
         return await q.edit_message_text(preview, parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
+
+    if action == "sh":  # sh:<smena> — kirim uchun smena tanlandi
+        st = ctx.user_data.get("sale")
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not st:
+            return await q.message.reply_text("Bu xabar eskirgan. «💰 Kirim» ni qayta bosing.")
+        st.update(shift=int(parts[1]), step="cash")
+        return await ask_cash(q.message, st)
 
     if action == "ky":  # kirim: kechagi kun uchun
         st = ctx.user_data.get("sale")

@@ -198,7 +198,8 @@ def detail_block(d: Data) -> str:
     if d.sales or d.yandex:
         lines = []
         for r in d.sales:
-            lines += [db.point_name(r["point_id"])[:W], line("  naqd", r["cash"]), line("  karta", r["card"])]
+            lines += [f"{db.point_name(r['point_id'])}, {r['shift']}-smena"[:W],
+                      line("  naqd", r["cash"]), line("  karta", r["card"])]
         for r in d.yandex:
             lines.append(line(f"Yandex ({db.point_name(r['point_id'])})", r["amount"]))
         parts.append("<b>Tushum</b>\n" + pre(lines))
@@ -354,9 +355,10 @@ def excel_report(start: date, end: date, path: str) -> str:
 
     # 3. Savdo (kassirlar)
     ws3 = wb.create_sheet("Kirim")
-    ws3.append(["Sana", "Tochka", "Naqd", "Karta", "Jami", "Kim yozdi"])
+    ws3.append(["Sana", "Tochka", "Smena", "Naqd", "Karta", "Jami", "Kim yozdi"])
     for r in d.sales:
-        ws3.append([r["day"], pts.get(r["point_id"], "?"), r["cash"], r["card"], r["cash"] + r["card"],
+        ws3.append([r["day"], pts.get(r["point_id"], "?"), f"{r['shift']}-smena", r["cash"], r["card"],
+                    r["cash"] + r["card"],
                     db.user_names().get(r["created_by"], ("?",))[0]])
 
     # 4. Xarajatlar

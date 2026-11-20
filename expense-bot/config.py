@@ -43,6 +43,8 @@ DIGEST_TIME = _time("DIGEST_TIME", "09:00")                  # xo'jayinlarga kec
 BACKUP_WEEKDAY = int(os.getenv("BACKUP_WEEKDAY", "6"))       # 0=dushanba … 6=yakshanba
 BACKUP_TIME = _time("BACKUP_TIME", "10:00")
 NOTIFY_OWNERS_ON_SALES = os.getenv("NOTIFY_OWNERS_ON_SALES", "1") == "1"
+# Kuniga nechta smena (kirim smena bo'yicha yoziladi)
+SHIFTS = max(1, int(os.getenv("SHIFTS", "2")))
 
 INVITE_TTL_HOURS = 48
 

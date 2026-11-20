@@ -60,11 +60,12 @@ CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,
     point_id INTEGER NOT NULL REFERENCES points(id),
+    shift INTEGER NOT NULL DEFAULT 1,       -- smena raqami (1, 2, ...)
     cash INTEGER NOT NULL DEFAULT 0,
     card INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (day, point_id)
+    UNIQUE (day, point_id, shift)
 );
 
 CREATE TABLE IF NOT EXISTS yandex (
@@ -102,6 +103,31 @@ def conn():
 def init():
     with conn() as c:
         c.executescript(SCHEMA)
+        _migrate_sales_shift(c)
+
+
+def _migrate_sales_shift(c):
+    """Eski bazada sales jadvalida smena yo'q edi: jadvalni qayta quramiz, eski yozuvlar 1-smena bo'ladi."""
+    cols = [r["name"] for r in c.execute("PRAGMA table_info(sales)")]
+    if "shift" in cols:
+        return
+    c.executescript("""
+        CREATE TABLE sales_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            point_id INTEGER NOT NULL REFERENCES points(id),
+            shift INTEGER NOT NULL DEFAULT 1,
+            cash INTEGER NOT NULL DEFAULT 0,
+            card INTEGER NOT NULL DEFAULT 0,
+            created_by INTEGER,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (day, point_id, shift)
+        );
+        INSERT INTO sales_new(id, day, point_id, shift, cash, card, created_by, updated_at)
+            SELECT id, day, point_id, 1, cash, card, created_by, updated_at FROM sales;
+        DROP TABLE sales;
+        ALTER TABLE sales_new RENAME TO sales;
+    """)
 
 
 def audit(tg_id: int, action: str, details: str = ""):
@@ -276,26 +302,30 @@ def delete_expense(expense_id: int):
 
 # ---------- savdo (naqd / karta) ----------
 
-def get_sale(day: date, point_id: int):
+def get_sale(day: date, point_id: int, shift: int | None = None):
+    """shift berilmasa — o'sha kunning istalgan smenasi (eslatma uchun)."""
     with conn() as c:
-        return c.execute("SELECT * FROM sales WHERE day=? AND point_id=?",
-                         (day.isoformat(), point_id)).fetchone()
+        if shift is None:
+            return c.execute("SELECT * FROM sales WHERE day=? AND point_id=? LIMIT 1",
+                             (day.isoformat(), point_id)).fetchone()
+        return c.execute("SELECT * FROM sales WHERE day=? AND point_id=? AND shift=?",
+                         (day.isoformat(), point_id, shift)).fetchone()
 
 
-def upsert_sale(day: date, point_id: int, cash: int, card: int, by: int):
+def upsert_sale(day: date, point_id: int, cash: int, card: int, by: int, shift: int = 1):
     with conn() as c:
         c.execute(
-            "INSERT INTO sales(day, point_id, cash, card, created_by) VALUES (?,?,?,?,?)"
-            " ON CONFLICT(day, point_id) DO UPDATE SET cash=excluded.cash, card=excluded.card,"
+            "INSERT INTO sales(day, point_id, shift, cash, card, created_by) VALUES (?,?,?,?,?,?)"
+            " ON CONFLICT(day, point_id, shift) DO UPDATE SET cash=excluded.cash, card=excluded.card,"
             " created_by=excluded.created_by, updated_at=CURRENT_TIMESTAMP",
-            (day.isoformat(), point_id, cash, card, by),
+            (day.isoformat(), point_id, shift, cash, card, by),
         )
 
 
 def sales_between(start: date, end: date, point_id=None) -> list[sqlite3.Row]:
     f, args = _point_filter(point_id)
     with conn() as c:
-        return c.execute(f"SELECT * FROM sales WHERE day BETWEEN ? AND ?{f} ORDER BY day, point_id",
+        return c.execute(f"SELECT * FROM sales WHERE day BETWEEN ? AND ?{f} ORDER BY day, point_id, shift",
                          (start.isoformat(), end.isoformat(), *args)).fetchall()
 
 

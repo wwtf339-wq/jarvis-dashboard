@@ -164,14 +164,17 @@ Xo'jayinlarga «Ali xarajat yozdi: …» degan xabar boradi. Hisobotda har bir x
 
 **Smena oxirida (1 daqiqa):**
 1. **💰 Kirim** ni bosadi.
-2. Naqd summani yozadi: `2 500 000`, `2.500.000` yoki `2,5 mln`.
-3. Kartaga tushganini yozadi (terminal, Click, Payme).
-4. **✅ Saqlash** ni bosadi.
+2. Smenani tanlaydi: **1-smena** yoki **2-smena** (yozilgan smena yonida ✅ turadi).
+3. **Naqd:** summani yozadi, masalan `3456000`, `3 456 000` yoki `3,4 mln`.
+4. **Karta:** kartaga tushganini yozadi (terminal, Click, Payme), masalan `870000`.
+5. **✅ Saqlash** ni bosadi.
+
+Har smena alohida saqlanadi, hisobotda kunlik jami va har smena alohida ko'rinadi. Smenalar soni `.env` dagi `SHIFTS` bilan o'zgaradi (standart 2).
 
 - Kechasi 05:00 gacha kiritilgan savdo oldingi ish kuniga yoziladi. Tochka kechasi 2-3 da yopilsa ham to'g'ri hisoblanadi.
-- Xato yozsa, «💰 Kirim» ni yana bosadi va to'g'risini yozadi. Bot eskisini ko'rsatib, almashtiradi.
+- Xato yozsa, «💰 Kirim» ni yana bosadi, o'sha smenani tanlab, to'g'risini yozadi. Bot eskisini ko'rsatib, almashtiradi.
 - Unutsa, bot soat 23:30 da eslatadi. Ertasiga yozmoqchi bo'lsa, «💰 Kirim» dan keyin chiqadigan **📆 Kechagi kun uchun** tugmasini bosadi.
-- Kassir saqlashi bilan xo'jayinlarga «Chilonzor, 14.11: naqd …, karta …» degan xabar keladi.
+- Kassir saqlashi bilan xo'jayinlarga «Chilonzor, 2-smena, 14.11: naqd …, karta …» degan xabar keladi.
 
 ### Xo'jayin
 - **Bozorlik / to'lovlar:** bitta ovozli xabarda hammasini aytish mumkin:
