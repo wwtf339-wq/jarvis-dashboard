@@ -331,8 +331,8 @@ def excel_report(start: date, end: date, path: str) -> str:
     workers = [r for r in employee_payments(start, end) if r["paid"] or r["salary"]]
     for key, name in CATEGORIES.items():
         ws.append([name, cats.get(key, 0)])
-        if key == "bozorlik":  # bozorlikni mahsulot nomi bo'yicha ochib ko'rsatamiz
-            for nm, total, times in items_breakdown(d.expenses, "bozorlik"):
+        if key != "ishchilar":  # bozorlik, ijara, prochee — har bir xarajat nomi bilan
+            for nm, total, times in items_breakdown(d.expenses, key):
                 ws.append([f"   {nm}", total, f"{times} marta" if times > 1 else ""])
         if key == "ishchilar":  # ishchilar summasini ism bo'yicha ochib ko'rsatamiz
             for r in sorted(workers, key=lambda r: -r["paid"]):
