@@ -20,19 +20,17 @@ Shundan keyin kod GitHub'da, `claude/telegram-expense-tracking-bot-kmd0y7` branc
 
 | | Xo'jayin | Tochka admini | Xodim / kassir | Begona odam |
 |---|---|---|---|---|
-| Qaysi tochkalar | hammasi | faqat o'z tochkasi | faqat o'z tochkasi | — |
-| Menyusi | to'liq menyu | to'liq menyu (o'z tochkasi bo'yicha) | faqat **💸 Xarajat** va **💰 Kirim** | — |
-| 💰 Kirim (smena → naqd → karta) | ✅ | ✅ | ✅ | ❌ |
-| 💸 Xarajat: ovoz yoki matn | ✅ | ✅ | ✅ | ❌ |
-| Hisobot va Excel | ✅ hamma tochka | ✅ o'z tochkasi | ❌ | ❌ |
-| Ishchi qo'shish, oylik, bo'shatish | ✅ | ✅ o'z tochkasi | ❌ | ❌ |
-| Kassir qo'shish | ✅ | ✅ o'z tochkasiga | ❌ | ❌ |
-| Xato xarajatni o'chirish (/ochir) | ✅ | ✅ o'z tochkasi | savdoni qayta kiritib almashtiradi | ❌ |
-| Yandex tushumi | ✅ | ❌ | ❌ | ❌ |
-| Tochka, admin, xo'jayin qo'shish; /foydalanuvchilar | ✅ | ❌ | ❌ | ❌ |
+| Menyusi | to'liq menyu | faqat **📝 Kunlik hisobot** | faqat **💸 Xarajat** va **💰 Kirim** | — |
+| Kechagi kun hisoboti (savdo, xarajat, karta, kassadagi naqd) | ✅ ko'radi (/kunlik) | ✅ yozadi, o'z tochkasi | ❌ | ❌ |
+| Yozilgan hisobotni o'zgartirish yoki o'chirish | ✅ /kunlik_ochir | ❌ | ❌ | ❌ |
+| 💰 Kirim, 💸 Xarajat | ✅ | faqat kunlik hisobot ichida | ✅ o'z tochkasiga | ❌ |
+| Hisobot, Excel, ishchilar, oylik | ✅ | ❌ | ❌ | ❌ |
+| Tochka, admin, kassir, xo'jayin qo'shish; /foydalanuvchilar | ✅ | ❌ | ❌ | ❌ |
 | /tozalash — hamma yozuvlarni o'chirish | ✅ (faqat asosiy xo'jayin) | ❌ | ❌ | ❌ |
 
-Kassir yoki admin xarajat/kirim yozsa, xo'jayinga va o'sha tochka adminiga xabar boradi.
+**Admin har kuni ertalab** «📝 Kunlik hisobot» ni bosadi va kechagi kunni yozadi: jami savdo (1+2 smena) → xarajatlar (ishchilar kunligi, non, mayda-chuyda; matn yoki ovoz) → karta/schetga tushgani → kassada qolgan naqd. Bot `savdo − karta − xarajat` ni hisoblab, kassadagi naqd bilan solishtiradi va farqni ko'rsatadi (⚠️ kam / ortiqcha). Saqlangach xo'jayinga to'liq hisobot keladi. Soat 10:00 gacha yozilmasa, adminga eslatma boradi. Admin hisoboti o'sha kun uchun kassir kiritgan smena kirimlarining o'rnini egallaydi.
+
+Kassir xarajat/kirim yozsa, xo'jayinga xabar boradi.
 
 **Botga qanday kiriladi:**
 - **Asosiy xo'jayinlar** `.env` dagi `OWNER_IDS` ga yoziladi. Ular botdan hech qachon chiqarib yuborilmaydi.

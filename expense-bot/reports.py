@@ -1,7 +1,7 @@
 """Hisobotlar: Telegram uchun matn (telefon ekraniga mos) va Excel fayl."""
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from html import escape
 
@@ -92,6 +92,7 @@ class Data:
     sales: list
     expenses: list
     yandex: list
+    closings: list = field(default_factory=list)
 
     @property
     def cash(self): return sum(r["cash"] for r in self.sales)
@@ -115,7 +116,8 @@ def collect(start: date, end: date, point_id=None) -> Data:
     return Data(start, end, point_id,
                 db.sales_between(start, end, point_id),
                 db.expenses_between(start, end, point_id),
-                db.yandex_between(start, end, point_id))
+                db.yandex_between(start, end, point_id),
+                db.closings_between(start, end, point_id))
 
 
 # ---------- matn bloklari ----------
@@ -192,17 +194,38 @@ def daily_block(d: Data) -> str:
     return pre(lines) + "\n<i>k = ming so'm</i>"
 
 
+def shift_label(n: int) -> str:
+    return "kunlik" if not n else f"{n}-smena"
+
+
+def kassa_lines(c) -> list[str]:
+    """Kunlik hisobot: hisob bo'yicha naqd va kassada sanalgan naqd farqi."""
+    expected = c["total"] - c["card"] - c["spent"]
+    diff = c["cash_left"] - expected
+    out = [f"Kassa — {db.point_name(c['point_id'])}"[:W],
+           line("  savdo", c["total"]), line("  karta/schet", c["card"]), line("  xarajat", c["spent"]),
+           line("  naqd (hisob)", expected), line("  naqd (kassada)", c["cash_left"])]
+    out.append(line("  ✅ farq yo'q", 0) if diff == 0 else
+               line("  ⚠️ kam" if diff < 0 else "  ⚠️ ortiqcha", abs(diff)))
+    return out
+
+
 def detail_block(d: Data) -> str:
     """Kunlik batafsil: har bir tochka savdosi va har bir xarajat qatori."""
     parts = []
     if d.sales or d.yandex:
         lines = []
         for r in d.sales:
-            lines += [f"{db.point_name(r['point_id'])}, {r['shift']}-smena"[:W],
+            lines += [f"{db.point_name(r['point_id'])}, {shift_label(r['shift'])}"[:W],
                       line("  naqd", r["cash"]), line("  karta", r["card"])]
         for r in d.yandex:
             lines.append(line(f"Yandex ({db.point_name(r['point_id'])})", r["amount"]))
         parts.append("<b>Tushum</b>\n" + pre(lines))
+    if d.closings:
+        lines = []
+        for c in d.closings:
+            lines += kassa_lines(c)
+        parts.append("<b>Kassa</b>\n" + pre(lines))
     names = db.user_names()
     for key, name in CATEGORIES.items():
         rows = [r for r in d.expenses if r["category"] == key]
@@ -215,7 +238,7 @@ def detail_block(d: Data) -> str:
                 label += f" {r['quantity']}"
             lines.append(line(f"#{r['id']} {label}", r["amount"]))
             who = names.get(r["created_by"])
-            if who and who[1] == "cashier":
+            if who and who[1] in ("cashier", "admin"):
                 lines.append(f"   ✍ {who[0]}"[:W])
         lines.append(line("Jami", sum(r["amount"] for r in rows)))
         parts.append(f"<b>{name}</b>\n" + pre(lines))
@@ -231,7 +254,7 @@ def employee_payments(start: date, end: date, point_id=None) -> list[dict]:
         if r["employee_id"]:
             paid_by_id[r["employee_id"]] += r["amount"]
         else:
-            paid_by_name[(r["person"] or "—").strip().lower()] += r["amount"]
+            paid_by_name[(r["person"] or "kunlik (umumiy)").strip().lower()] += r["amount"]
     out = []
     for e in db.employees(active_only=False, point_id=point_id):
         if not e["active"] and (not e["fired_on"] or e["fired_on"] < start.isoformat()):
@@ -294,6 +317,11 @@ def digest(day: date) -> str:
              pre([line("Tushum", d.income), line("Xarajat", d.spent), line("Farq", d.income - d.spent)]),
              f"<b>{MONTHS[day.month]} boshidan</b>",
              pre([line("Tushum", m.income), line("Xarajat", m.spent), line("Farq", m.income - m.spent)])]
+    if d.closings:
+        k = []
+        for c in d.closings:
+            k += kassa_lines(c)
+        lines += ["<b>Kassa</b>", pre(k)]
     lines += missing_sales(collect(ms, me))
     return "\n".join(lines)
 
@@ -375,7 +403,7 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
     ws3 = wb.create_sheet("Kirim")
     ws3.append(["Sana", "Tochka", "Smena", "Naqd", "Karta", "Jami", "Kim yozdi"])
     for r in d.sales:
-        ws3.append([r["day"], pts.get(r["point_id"], "?"), f"{r['shift']}-smena", r["cash"], r["card"],
+        ws3.append([r["day"], pts.get(r["point_id"], "?"), shift_label(r["shift"]), r["cash"], r["card"],
                     r["cash"] + r["card"],
                     db.user_names().get(r["created_by"], ("?",))[0]])
 
@@ -394,7 +422,17 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
     for r in d.yandex:
         ws5.append([r["day"], pts.get(r["point_id"], "Umumiy"), r["amount"], r["note"]])
 
-    # 6. Ishchilar
+    # 6. Kassa (admin kunlik hisobotlari)
+    ws7 = wb.create_sheet("Kassa")
+    ws7.append(["Sana", "Tochka", "Savdo", "Karta/schet", "Xarajat", "Naqd (hisob)", "Naqd (kassada)",
+                "Farq", "Kim yozdi"])
+    names = db.user_names()
+    for c in d.closings:
+        expected = c["total"] - c["card"] - c["spent"]
+        ws7.append([c["day"], pts.get(c["point_id"], "?"), c["total"], c["card"], c["spent"], expected,
+                    c["cash_left"], c["cash_left"] - expected, names.get(c["created_by"], ("?",))[0]])
+
+    # 7. Ishchilar
     ws6 = wb.create_sheet("Ishchilar")
     ws6.append(["Ishchi", "Tochka", "Oylik", "Oldi", "Qoldi", "Holati"])
     for r in employee_payments(start, end, point_id):

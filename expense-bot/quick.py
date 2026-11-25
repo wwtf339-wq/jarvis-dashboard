@@ -27,6 +27,8 @@ KEYWORDS = {
 }
 WORD2CAT = {w: c for c, words in KEYWORDS.items() for w in words}
 
+WORKERS_DAILY = {"ishchilar", "ishchi", "ishchilarga", "ishchilar kunligi", "kunlik", "ish haqi",
+                 "ishchilar puli", "kunlik pul"}
 WORKER_VERBS = ("o'ziga oldi", "oziga oldi", "oldi", "berildi", "berdim", "avans", "oylik")
 AMOUNT_RE = re.compile(
     r"^(?P<name>[a-z'ʻ’` \-]+?)\s+(?P<amount>\d[\d\s.,]*(?:\s*(?:ming|mln|million|k))?)"
@@ -57,6 +59,8 @@ def _one(segment: str, employees: dict):
             return None
         item = "Oylik" if "oylik" in (rest, tail) else "Avans"
         return ai.Expense(category="ishchilar", item=item, amount=amount, person=emp)
+    if name in WORKERS_DAILY and not tail:  # "ishchilar 400000" — ishchilarning kunlik puli
+        return ai.Expense(category="ishchilar", item="Kunlik ish haqi", amount=amount)
     if tail:  # "benzin 50000 quydim" kabi qo'shimcha so'zlar — Gemini hal qilsin
         return None
     if any(re.search(r"(dim|dik|di|ldi|ydi|ing|man)$", w) for w in name.split()[1:]):

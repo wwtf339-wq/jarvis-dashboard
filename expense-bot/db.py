@@ -68,6 +68,20 @@ CREATE TABLE IF NOT EXISTS sales (
     UNIQUE (day, point_id, shift)
 );
 
+CREATE TABLE IF NOT EXISTS closings (           -- admin har kuni ertalab yozadigan kunlik hisobot
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day TEXT NOT NULL,
+    point_id INTEGER NOT NULL REFERENCES points(id),
+    total INTEGER NOT NULL,          -- jami savdo (hamma smena)
+    card INTEGER NOT NULL,           -- karta / schetga tushgani
+    spent INTEGER NOT NULL,          -- shu hisobotdagi xarajatlar jami
+    cash_left INTEGER NOT NULL,      -- kassada qolgan naqd (sanalgan)
+    expense_ids TEXT,                -- shu hisobot bilan yozilgan xarajatlar (vergul bilan)
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (day, point_id)
+);
+
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,                        -- hisobga tushgan kun
@@ -341,9 +355,65 @@ def get_expense(expense_id: int):
 
 
 def wipe_records() -> dict:
-    """Barcha xarajat, kirim va Yandex yozuvlarini o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
+    """Barcha xarajat, kirim, Yandex va kunlik hisobotlarni o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
     with conn() as c:
-        return {t: c.execute(f"DELETE FROM {t}").rowcount for t in ("expenses", "sales", "yandex")}
+        return {t: c.execute(f"DELETE FROM {t}").rowcount for t in ("expenses", "sales", "yandex", "closings")}
+
+
+# ---------- kunlik hisobot (admin) ----------
+
+def get_closing(day: date, point_id: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM closings WHERE day=? AND point_id=?", (day.isoformat(), point_id)).fetchone()
+
+
+def save_closing(day: date, point_id: int, total: int, card: int, cash_left: int,
+                 entries: list[dict], by: int) -> int:
+    """Kunlik hisobotni bitta tranzaksiyada saqlaydi:
+    xarajatlar -> expenses, savdo -> sales (shift=0, o'sha kunning smena yozuvlari almashtiriladi)."""
+    iso = day.isoformat()
+    with conn() as c:
+        ids = []
+        for e in entries:
+            ids.append(c.execute(
+                "INSERT INTO expenses(day, point_id, category, item, quantity, amount, person,"
+                " employee_id, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                (iso, point_id, e["category"], e["item"], e.get("quantity"), int(e["amount"]),
+                 e.get("person"), e.get("employee_id"), by)).lastrowid)
+        c.execute("DELETE FROM sales WHERE day=? AND point_id=?", (iso, point_id))
+        c.execute("INSERT INTO sales(day, point_id, shift, cash, card, created_by) VALUES (?,?,0,?,?,?)",
+                  (iso, point_id, max(total - card, 0), card, by))
+        spent = sum(int(e["amount"]) for e in entries)
+        return c.execute(
+            "INSERT INTO closings(day, point_id, total, card, spent, cash_left, expense_ids, created_by)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (iso, point_id, total, card, spent, cash_left, ",".join(map(str, ids)), by)).lastrowid
+
+
+def closings_between(start: date, end: date, point_id=None) -> list[sqlite3.Row]:
+    f, args = _point_filter(point_id)
+    with conn() as c:
+        return c.execute(f"SELECT * FROM closings WHERE day BETWEEN ? AND ?{f} ORDER BY day, point_id",
+                         (start.isoformat(), end.isoformat(), *args)).fetchall()
+
+
+def last_closings(n: int = 10) -> list[sqlite3.Row]:
+    with conn() as c:
+        return c.execute("SELECT * FROM closings ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+
+
+def delete_closing(closing_id: int):
+    """Xo'jayin uchun: hisobotni, uning savdo yozuvini va xarajatlarini o'chiradi."""
+    with conn() as c:
+        row = c.execute("SELECT * FROM closings WHERE id=?", (closing_id,)).fetchone()
+        if not row:
+            return None
+        ids = [int(x) for x in (row["expense_ids"] or "").split(",") if x]
+        if ids:
+            c.execute(f"DELETE FROM expenses WHERE id IN ({','.join('?' * len(ids))})", ids)
+        c.execute("DELETE FROM sales WHERE day=? AND point_id=? AND shift=0", (row["day"], row["point_id"]))
+        c.execute("DELETE FROM closings WHERE id=?", (closing_id,))
+        return row
 
 
 def delete_expense(expense_id: int):

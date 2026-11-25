@@ -24,7 +24,7 @@ import db
 import quick
 import reports
 from config import (BACKUP_TIME, BACKUP_WEEKDAY, BOT_TOKEN, CATEGORIES, DB_PATH, DIGEST_TIME,
-                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, OWNER_IDS, SALES_REMINDER_TIME, at,
+                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, ADMIN_REMINDER_TIME, OWNER_IDS, SALES_REMINDER_TIME, at,
                     business_today)
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
@@ -41,6 +41,8 @@ B_EXP, B_INC = "💸 Xarajat", "💰 Kirim"
 OWNER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC], [O_TODAY, O_WEEK, O_MONTH], [O_XLSX, O_STAFF, O_ADMIN]],
                                resize_keyboard=True)
 CASHIER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC]], resize_keyboard=True)
+B_DAY = "📝 Kunlik hisobot"
+ADMIN_KB = ReplyKeyboardMarkup([[B_DAY]], resize_keyboard=True)
 
 EXP_PROMPT = ("💸 Xarajatni <b>ovoz</b> yoki <b>matn</b> bilan yuboring. Bitta xabarda bir nechtasini aytish mumkin:\n"
               "<i>«Ibrat 100 ming o'ziga oldi, 50 ming benzin quydim, 10 kilo pomidor 100 ming»</i>")
@@ -58,7 +60,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /nuqtalar — ro'yxat
 
 👤 <b>Foydalanuvchilar</b>
-/admin_qosh — tochka admini uchun taklif havolasi
+/admin_qosh — tochka admini (har kuni ertalab kechagi kun hisobotini yozadi)
 /kassir_qosh — kassir uchun taklif havolasi
 /hujayin_qosh — xo'jayin uchun taklif havolasi
 /foydalanuvchilar — ro'yxat, o'chirib qo'yish
@@ -79,23 +81,22 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /ochir № — xarajatni o'chirish
 /yandex_ochir № — Yandex yozuvini o'chirish
 
+📝 <b>Kunlik hisobotlar (adminlar)</b>
+/kunlik — oxirgi hisobotlar
+/kunlik_ochir № — hisobotni o'chirish (admin qayta yoza oladi)
+
 🧹 /tozalash — barcha xarajat, kirim va Yandex yozuvlarini o'chirish (avval zahira nusxa yuboriladi)"""
 
 ADMIN_HELP = """<b>Tochka admini: {point}</b>
-Hamma narsa faqat shu tochka bo'yicha.
 
-💸 <b>Xarajat</b> — ovoz yoki matn: <i>«pomidor 100 ming, Umid 700 ming oldi»</i>
-💰 <b>Kirim</b> — smena kirimi (smena → naqd → karta)
-📊 <b>Hisobot</b>: 📅 Bugun, 📆 Hafta, 🗓 Oy, 📊 Excel (yoki /bugun /kecha /hafta /oy /excel)
+Har kuni ertalab <b>📝 Kunlik hisobot</b> ni bosib, kechagi kunni yozasiz:
+1. 💰 Jami savdo (1 va 2-smena birga)
+2. 💸 Xarajatlar — matn yoki ovoz: <i>ishchilar 400000, non 120000, salfetka 30000</i>
+3. 💳 Karta / schetga tushgani
+4. 💵 Kassada qolgan naqd
 
-👥 <b>Ishchilar</b>
-/ishchilar — ro'yxat, oylik, olgani, qoldig'i
-/ishchi_qosh Ism — ishga olish (/ishchi_qosh Ibrat, Jahongir)
-/oylik Ism Summa — oylik belgilash
-/boshat № — ishdan bo'shatish
-
-/kassir_qosh — shu tochkaga kassir uchun taklif havolasi
-/oxirgi — oxirgi yozuvlar,  /ochir № — xato yozuvni o'chirish"""
+Bot hisoblab, kassadagi naqd to'g'ri yoki farq borligini ko'rsatadi.
+Saqlangan hisobotni o'zgartirib yoki o'chirib bo'lmaydi — xato bo'lsa, xo'jayinga ayting."""
 
 CASHIER_HELP = ("Salom! Siz <b>{point}</b> xodimisiz.\n\n"
                 "💸 <b>Xarajat</b> — pul chiqsa (bozorlik, avans, benzin…) ovoz yoki matn bilan yozing.\n"
@@ -183,7 +184,7 @@ def owner_only(fn):
     return wrapper
 
 
-MANAGERS = ("owner", "admin")
+MANAGERS = ("owner",)   # admin faqat kunlik hisobot yozadi
 
 
 def manager_only(fn):
@@ -204,6 +205,10 @@ def scope(u):
 
 def in_scope(u, point_id) -> bool:
     return u["role"] == "owner" or (point_id and point_id == u["point_id"])
+
+
+def role_kb(u):
+    return {"owner": OWNER_KB, "admin": ADMIN_KB}.get(u["role"], CASHIER_KB)
 
 
 def role_help(u) -> str:
@@ -245,7 +250,7 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         db.set_user_name(tg_id, name)
 
     await update.message.reply_text(role_help(u), parse_mode=HTML,
-                                    reply_markup=OWNER_KB if u["role"] in MANAGERS else CASHIER_KB)
+                                    reply_markup=role_kb(u))
     if u["role"] == "owner" and not db.points():
         await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Chilonzor")
 
@@ -255,7 +260,7 @@ async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     await update.message.reply_text(role_help(u), parse_mode=HTML,
-                                    reply_markup=OWNER_KB if u["role"] in MANAGERS else CASHIER_KB)
+                                    reply_markup=role_kb(u))
 
 
 @owner_only
@@ -507,7 +512,7 @@ async def ask_point_or_confirm(message, ctx, item: dict, point_hint=None):
                              reply_markup=points_kb(f"pt:{key}", with_general=True))
 
 
-async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
+def parsed_expenses(parsed: ai.Parsed) -> list[dict]:
     expenses = []
     for e in parsed.expenses:
         if e.amount <= 0:
@@ -518,6 +523,11 @@ async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
             if emp:
                 d["employee_id"], d["person"] = emp["id"], emp["name"]
         expenses.append(d)
+    return expenses
+
+
+async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
+    expenses = parsed_expenses(parsed)
     yandex = [y.model_dump() for y in parsed.yandex if y.amount > 0] if u["role"] == "owner" else []
     if not expenses and not yandex:
         return await message.reply_text("Summa topilmadi. Narsasi va summasi bilan qayta ayting.")
@@ -802,6 +812,7 @@ async def income_step(update: Update, ctx, u, st: dict, text: str):
 async def cancel_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.pop("sale", None)
     ctx.user_data.pop("salary_for", None)
+    ctx.user_data.pop("close", None)
     await update.message.reply_text("Bekor qilindi.")
 
 
@@ -819,8 +830,8 @@ async def save_sale(ctx, item: dict):
 
 
 async def notify_owners(ctx, text: str, skip=None, point_id=None):
-    """Xo'jayinlarga va (point_id berilsa) o'sha tochka adminlariga xabar."""
-    for oid in dict.fromkeys(db.owner_ids() + db.admins_of(point_id)):
+    """Xo'jayinlarga xabar."""
+    for oid in db.owner_ids():
         if oid == skip:
             continue
         try:
@@ -829,12 +840,194 @@ async def notify_owners(ctx, text: str, skip=None, point_id=None):
             log.warning("owner %s notify failed", oid)
 
 
+# ---------- admin: kunlik hisobot ----------
+
+CLOSE_EXP_PROMPT = ("💸 <b>Xarajatlar</b> — matn yoki ovoz bilan yozing:\n"
+                    "<i>ishchilar 400000, non 120000, salfetka 30000</i>\n\n"
+                    "Bir nechta xabar yuborsangiz ham bo'ladi — hammasi qo'shiladi.")
+
+
+def open_days(point_id: int) -> list[date]:
+    """Hisoboti hali yozilmagan oxirgi 3 kun (kechadan boshlab)."""
+    today = business_today()
+    days = [today - timedelta(days=i) for i in (1, 2, 3)]
+    return [d for d in days if not db.get_closing(d, point_id)]
+
+
+async def close_start(message, ctx, u):
+    ctx.user_data.pop("close", None)
+    days = open_days(u["point_id"])
+    if not days:
+        return await message.reply_text("✅ Kechagi hisobot allaqachon yozilgan.\n"
+                                        "Xato bo'lsa, xo'jayinga ayting — u o'chirib beradi, keyin qayta yozasiz.")
+    if len(days) == 1:
+        return await close_begin(message, ctx, u, days[0])
+    kb = [[InlineKeyboardButton(("Kecha, " if d == business_today() - timedelta(days=1) else "") + f"{d:%d.%m.%Y}",
+                                callback_data=f"cd:{d.isoformat()}")] for d in days]
+    await message.reply_text("Qaysi kun hisobotini yozasiz? (yozilmagan kunlar)", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def close_begin(message, ctx, u, day: date):
+    ctx.user_data["close"] = dict(day=day.isoformat(), point=u["point_id"], step="total", expenses=[])
+    await message.reply_text(
+        f"📝 <b>Kunlik hisobot</b> — 🏪 {escape(db.point_name(u['point_id']))}, 📅 {day:%d.%m.%Y}\n\n"
+        "💰 <b>Jami savdo</b> (1 va 2-smena birga):\n(masalan: 12500000)\n\nBekor qilish: /bekor",
+        parse_mode=HTML)
+
+
+def close_exp_kb(has_items: bool):
+    rows = [[InlineKeyboardButton("➡️ Davom etish" if has_items else "Xarajat yo'q ➡️", callback_data="cx:next")]]
+    if has_items:
+        rows.append([InlineKeyboardButton("🗑 Ro'yxatni tozalab, qayta yozish", callback_data="cx:clear")])
+    return InlineKeyboardMarkup(rows)
+
+
+def close_exp_list(st: dict) -> str:
+    if not st["expenses"]:
+        return "Xarajat yo'q."
+    lines = [f"• [{CATEGORIES[e['category']]}] {escape(e['item'])}"
+             + (f" — {escape(e['person'])}" if e.get("person") else "") + f": <b>{som(e['amount'])}</b>"
+             for e in st["expenses"]]
+    lines.append(f"Xarajat jami: <b>{som(sum(e['amount'] for e in st['expenses']))}</b>")
+    return "\n".join(lines)
+
+
+def close_preview(st: dict) -> str:
+    day = date.fromisoformat(st["day"])
+    spent = sum(e["amount"] for e in st["expenses"])
+    expected = st["total"] - st["card"] - spent
+    diff = st["cash"] - expected
+    check = ("✅ Kassa to'g'ri — farq yo'q" if diff == 0 else
+             f"⚠️ Kassada <b>{som(-diff)}</b> kam" if diff < 0 else f"⚠️ Kassada <b>{som(diff)}</b> ortiqcha")
+    return (f"📝 <b>Kunlik hisobot</b> — 🏪 {escape(db.point_name(st['point']))}, 📅 {day:%d.%m.%Y}\n\n"
+            f"💰 Jami savdo: <b>{som(st['total'])}</b>\n\n"
+            f"💸 Xarajatlar:\n{close_exp_list(st)}\n\n"
+            f"💳 Karta / schet: <b>{som(st['card'])}</b>\n"
+            f"💵 Kassada naqd: <b>{som(st['cash'])}</b>\n\n"
+            f"Hisob bo'yicha naqd: {som(st['total'])} − {som(st['card'])} − {som(spent)} = <b>{som(expected)}</b>\n"
+            f"{check}")
+
+
+async def close_add_expenses(message, ctx, u, st: dict, parsed):
+    added = parsed_expenses(parsed) if parsed else []
+    if not added:
+        return await message.reply_text("Summa topilmadi. Masalan: <i>non 120000, salfetka 30000</i>",
+                                        parse_mode=HTML, reply_markup=close_exp_kb(bool(st["expenses"])))
+    st["expenses"] += added
+    await message.reply_text(close_exp_list(st) + "\n\nYana bo'lsa yozing, bo'lmasa «Davom etish» ni bosing.",
+                             parse_mode=HTML, reply_markup=close_exp_kb(True))
+
+
+async def close_text(update, ctx, u, st: dict, text: str):
+    msg = update.message
+    if st["step"] == "exp":
+        parsed = quick.parse(text, ai_context()[1])
+        if not parsed:
+            wait = await msg.reply_text("⏳ O'qiyapman...")
+            try:
+                parsed = await ai.parse_text(text, *ai_context())
+            except Exception:
+                log.exception("close text parse failed")
+                parsed = None
+            await _drop(wait)
+        return await close_add_expenses(msg, ctx, u, st, parsed)
+    amount = reports.parse_amount(text)
+    if amount is None:
+        return await msg.reply_text("Faqat raqam yozing, masalan: 12500000  (bekor: /bekor)")
+    if st["step"] == "total":
+        st.update(total=amount, step="exp")
+        return await msg.reply_text(CLOSE_EXP_PROMPT, parse_mode=HTML, reply_markup=close_exp_kb(False))
+    if st["step"] == "card":
+        st.update(card=amount, step="cash")
+        return await msg.reply_text("💵 <b>Kassada qolgan naqd</b>:\n(masalan: 7350000)", parse_mode=HTML)
+    if st["step"] == "cash":
+        st["cash"] = amount
+        ctx.user_data.pop("close", None)
+        item = dict(type="close", by=u["tg_id"], **st)
+        key = stash(ctx, item)
+        return await msg.reply_text(close_preview(item) + "\n\nSaqlangandan keyin o'zgartirib bo'lmaydi.",
+                                    parse_mode=HTML, reply_markup=confirm_kb(key))
+
+
+async def close_voice(update, ctx, u, st: dict):
+    msg = update.message
+    if st["step"] != "exp":
+        return await msg.reply_text("Bu bosqichda faqat raqam yozing.")
+    media = msg.voice or msg.audio
+    wait = await msg.reply_text("⏳ Eshityapman...")
+    try:
+        f = await media.get_file()
+        data = bytes(await f.download_as_bytearray())
+        parsed = await ai.parse_voice(data, "audio/ogg" if msg.voice else (media.mime_type or "audio/mpeg"),
+                                      *ai_context())
+    except Exception:
+        log.exception("close voice parse failed")
+        parsed = None
+    await _drop(wait)
+    await close_add_expenses(msg, ctx, u, st, parsed)
+
+
+async def save_close(ctx, u, item: dict) -> str:
+    day = date.fromisoformat(item["day"])
+    if db.get_closing(day, item["point"]):
+        return "⚠️ Bu kun hisoboti allaqachon yozilgan. O'zgartirish uchun xo'jayinga ayting."
+    cid = db.save_closing(day, item["point"], item["total"], item["card"], item["cash"], item["expenses"], u["tg_id"])
+    db.audit(u["tg_id"], "closing", f"{cid} {item['point']} {item['day']} {item['total']} {item['card']} {item['cash']}")
+    await notify_owners(ctx, f"📝 <b>{escape(u['name'] or str(u['tg_id']))}</b> kunlik hisobot yozdi (№{cid}):\n\n"
+                        + close_preview(item), skip=u["tg_id"])
+    return f"✅ Saqlandi (№{cid}). Rahmat!"
+
+
+@owner_only
+async def closings_cmd(update, ctx, u):
+    rows = db.last_closings(10)
+    if not rows:
+        return await update.message.reply_text("Hali kunlik hisobot yo'q. Admin qo'shish: /admin_qosh")
+    lines = ["<b>Oxirgi kunlik hisobotlar</b>"]
+    for c in rows:
+        diff = c["cash_left"] - (c["total"] - c["card"] - c["spent"])
+        mark = "✅" if diff == 0 else f"⚠️ {'kam' if diff < 0 else 'ortiq'} {som(abs(diff))}"
+        lines.append(f"№{c['id']} {c['day'][8:]}.{c['day'][5:7]} {escape(db.point_name(c['point_id']))}: "
+                     f"savdo {som(c['total'])}, naqd {som(c['cash_left'])} {mark}")
+    lines.append("\nO'chirish (admin qayta yozadi): /kunlik_ochir №")
+    await update.message.reply_text("\n".join(lines), parse_mode=HTML)
+
+
+@owner_only
+async def closing_delete_cmd(update, ctx, u):
+    if not ctx.args or not ctx.args[0].isdigit():
+        return await update.message.reply_text("Format: /kunlik_ochir 3   (ro'yxat: /kunlik)")
+    row = db.delete_closing(int(ctx.args[0]))
+    if not row:
+        return await update.message.reply_text("Bunday № topilmadi. /kunlik")
+    db.audit(u["tg_id"], "closing_delete", f"{row['id']} {row['point_id']} {row['day']}")
+    await update.message.reply_text(f"🗑 {row['day']} — {db.point_name(row['point_id'])} hisoboti o'chirildi "
+                                    "(savdo va xarajatlari bilan). Admin endi qayta yoza oladi.")
+
+
+async def job_admin_reminder(ctx: ContextTypes.DEFAULT_TYPE):
+    day = business_today() - timedelta(days=1)
+    for p in db.points():
+        if db.get_closing(day, p["id"]):
+            continue
+        for aid in db.admins_of(p["id"]):
+            try:
+                await ctx.bot.send_message(aid, f"⏰ Kechagi ({day:%d.%m}) hisobot hali yozilmagan: «📝 Kunlik hisobot»")
+            except Exception:
+                log.warning("admin %s reminder failed", aid)
+
+
 # ---------- umumiy xabar marshrutlari ----------
 
 async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     u = current_user(update)
     if not u:
         return await deny(update)
+    if u["role"] == "admin":
+        st = ctx.user_data.get("close")
+        if st:
+            return await close_voice(update, ctx, u, st)
+        return await update.message.reply_text("Avval «📝 Kunlik hisobot» ni bosing.", reply_markup=ADMIN_KB)
     ctx.user_data.pop("sale", None)
     await expense_voice(update, ctx, u)
 
@@ -844,6 +1037,14 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     text = update.message.text.strip()
+    if u["role"] == "admin":
+        if text == B_DAY:
+            return await close_start(update.message, ctx, u)
+        st = ctx.user_data.get("close")
+        if st:
+            return await close_text(update, ctx, u, st, text)
+        return await update.message.reply_text("Kechagi kun hisobotini yozish uchun «📝 Kunlik hisobot» ni bosing.",
+                                               reply_markup=ADMIN_KB)
     if text in (B_EXP, B_INC):
         ctx.user_data.pop("salary_for", None)
     if text == B_EXP:
@@ -918,6 +1119,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             text = sale_preview(item)
             await save_sale(ctx, item)
             await q.edit_message_text(text.split("\n\n⚠️")[0] + "\n\n✅ Saqlandi", parse_mode=HTML)
+        elif item["type"] == "close":
+            result = await save_close(ctx, u, item)
+            await q.edit_message_text(close_preview(item) + "\n\n" + result, parse_mode=HTML)
         return await q.answer("Saqlandi")
 
     if action == "pt":  # pt:<key>:<point_id>
@@ -933,6 +1137,27 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await finish_employee(q.message, item)
         preview = exp_preview(item) if item["type"] == "exp" else sale_preview(item)
         return await q.edit_message_text(preview, parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
+
+    if action == "cd" and u["role"] == "admin":  # cd:<sana> — kunlik hisobot kuni tanlandi
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        day = date.fromisoformat(parts[1])
+        if day not in open_days(u["point_id"]):
+            return await q.message.reply_text("Bu kun hisoboti allaqachon yozilgan.")
+        return await close_begin(q.message, ctx, u, day)
+
+    if action == "cx" and u["role"] == "admin":  # cx:next / cx:clear — xarajatlar bosqichi
+        st = ctx.user_data.get("close")
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not st or st["step"] != "exp":
+            return await q.message.reply_text("Bu xabar eskirgan. «📝 Kunlik hisobot» ni qayta bosing.")
+        if parts[1] == "clear":
+            st["expenses"] = []
+            return await q.message.reply_text("Ro'yxat tozalandi.\n\n" + CLOSE_EXP_PROMPT, parse_mode=HTML,
+                                              reply_markup=close_exp_kb(False))
+        st["step"] = "card"
+        return await q.message.reply_text("💳 <b>Karta / schetga tushgani</b>:\n(masalan: 4000000)", parse_mode=HTML)
 
     if action == "sh":  # sh:<smena> — kirim uchun smena tanlandi
         st = ctx.user_data.get("sale")
@@ -981,7 +1206,8 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         n = db.wipe_records()
         db.audit(u["tg_id"], "wipe_records", str(n))
         return await q.message.reply_text(
-            f"🧹 O'chirildi: {n['expenses']} ta xarajat, {n['sales']} ta kirim, {n['yandex']} ta Yandex yozuvi.\n"
+            f"🧹 O'chirildi: {n['expenses']} ta xarajat, {n['sales']} ta kirim, {n['yandex']} ta Yandex, "
+            f"{n['closings']} ta kunlik hisobot.\n"
             "Tochkalar, ishchilar va foydalanuvchilar joyida qoldi.")
 
     if action == "ainv":  # ainv:<point_id> — tochka admini taklifi
@@ -1016,7 +1242,7 @@ async def job_sales_reminder(ctx: ContextTypes.DEFAULT_TYPE):
     for p in db.points():
         if db.get_sale(day, p["id"]):
             continue
-        for cid in db.cashiers_of(p["id"]) + db.admins_of(p["id"]):
+        for cid in db.cashiers_of(p["id"]):
             try:
                 await ctx.bot.send_message(cid, f"⏰ Bugungi ({day:%d.%m}) kirimni yozishni unutmang: «💰 Kirim»")
             except Exception:
@@ -1067,7 +1293,7 @@ async def wipe_cmd(update, ctx, u):
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("🗑 Ha, hammasini o'chir", callback_data="tz:yes")],
                                [InlineKeyboardButton("❌ Yo'q, bekor", callback_data="tz:no")]])
     await update.message.reply_text(
-        "⚠️ <b>Barcha xarajat, kirim va Yandex yozuvlari o'chiriladi.</b>\n"
+        "⚠️ <b>Barcha xarajat, kirim, Yandex yozuvlari va kunlik hisobotlar o'chiriladi.</b>\n"
         "Tochkalar, ishchilar ro'yxati, kassir va adminlar qoladi.\n"
         "Yuqoridagi nusxa fayl bilan keyin hammasini tiklash mumkin.\n\nRostdan o'chiraymi?",
         parse_mode=HTML, reply_markup=kb)
@@ -1098,6 +1324,7 @@ def main():
     for name, fn in [("excel", excel_cmd), ("nuqta_qosh", add_point_cmd), ("nuqtalar", points_cmd),
                      ("kassir_qosh", add_cashier_cmd), ("hujayin_qosh", add_owner_cmd),
                      ("admin_qosh", add_admin_cmd), ("tozalash", wipe_cmd),
+                     ("kunlik", closings_cmd), ("kunlik_ochir", closing_delete_cmd),
                      ("foydalanuvchilar", users_cmd), ("ishchilar", staff_cmd),
                      ("ishchi_qosh", add_employee_cmd), ("oylik", salary_cmd), ("boshat", fire_cmd),
                      ("yandex", yandex_cmd), ("savdo", owner_sale_cmd), ("oxirgi", last_cmd),
@@ -1110,6 +1337,7 @@ def main():
 
     jq = app.job_queue
     jq.run_daily(job_sales_reminder, at(SALES_REMINDER_TIME), name="sales_reminder")
+    jq.run_daily(job_admin_reminder, at(ADMIN_REMINDER_TIME), name="admin_reminder")
     jq.run_daily(job_digest, at(DIGEST_TIME), name="digest")
     # PTB da 0 = yakshanba, bizning sozlamada 0 = dushanba
     jq.run_daily(job_backup, at(BACKUP_TIME), days=((BACKUP_WEEKDAY + 1) % 7,), name="backup")
