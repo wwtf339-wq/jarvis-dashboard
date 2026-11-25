@@ -58,6 +58,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /nuqtalar — ro'yxat
 
 👤 <b>Foydalanuvchilar</b>
+/admin_qosh — tochka admini uchun taklif havolasi
 /kassir_qosh — kassir uchun taklif havolasi
 /hujayin_qosh — xo'jayin uchun taklif havolasi
 /foydalanuvchilar — ro'yxat, o'chirib qo'yish
@@ -76,7 +77,25 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 ✏️ <b>Tuzatish</b>
 /oxirgi — oxirgi yozuvlar
 /ochir № — xarajatni o'chirish
-/yandex_ochir № — Yandex yozuvini o'chirish"""
+/yandex_ochir № — Yandex yozuvini o'chirish
+
+🧹 /tozalash — barcha xarajat, kirim va Yandex yozuvlarini o'chirish (avval zahira nusxa yuboriladi)"""
+
+ADMIN_HELP = """<b>Tochka admini: {point}</b>
+Hamma narsa faqat shu tochka bo'yicha.
+
+💸 <b>Xarajat</b> — ovoz yoki matn: <i>«pomidor 100 ming, Umid 700 ming oldi»</i>
+💰 <b>Kirim</b> — smena kirimi (smena → naqd → karta)
+📊 <b>Hisobot</b>: 📅 Bugun, 📆 Hafta, 🗓 Oy, 📊 Excel (yoki /bugun /kecha /hafta /oy /excel)
+
+👥 <b>Ishchilar</b>
+/ishchilar — ro'yxat, oylik, olgani, qoldig'i
+/ishchi_qosh Ism — ishga olish (/ishchi_qosh Ibrat, Jahongir)
+/oylik Ism Summa — oylik belgilash
+/boshat № — ishdan bo'shatish
+
+/kassir_qosh — shu tochkaga kassir uchun taklif havolasi
+/oxirgi — oxirgi yozuvlar,  /ochir № — xato yozuvni o'chirish"""
 
 CASHIER_HELP = ("Salom! Siz <b>{point}</b> xodimisiz.\n\n"
                 "💸 <b>Xarajat</b> — pul chiqsa (bozorlik, avans, benzin…) ovoz yoki matn bilan yozing.\n"
@@ -164,6 +183,37 @@ def owner_only(fn):
     return wrapper
 
 
+MANAGERS = ("owner", "admin")
+
+
+def manager_only(fn):
+    """Xo'jayin yoki tochka admini."""
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+        u = current_user(update)
+        if not u or u["role"] not in MANAGERS:
+            return await deny(update)
+        return await fn(update, ctx, u)
+    wrapper.__name__ = fn.__name__
+    return wrapper
+
+
+def scope(u):
+    """Xo'jayin hamma tochkani ko'radi (None), admin — faqat o'z tochkasini."""
+    return u["point_id"] if u["role"] == "admin" else None
+
+
+def in_scope(u, point_id) -> bool:
+    return u["role"] == "owner" or (point_id and point_id == u["point_id"])
+
+
+def role_help(u) -> str:
+    if u["role"] == "owner":
+        return OWNER_HELP
+    if u["role"] == "admin":
+        return ADMIN_HELP.format(point=escape(db.point_name(u["point_id"])))
+    return CASHIER_HELP.format(point=escape(db.point_name(u["point_id"])))
+
+
 # ---------- /start va takliflar ----------
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -179,7 +229,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await update.message.reply_text(f"Xo'jayinlar soni chegaraga ({MAX_OWNERS}) yetgan.")
         db.upsert_user(tg_id, name, inv["role"], inv["point_id"])
         db.audit(tg_id, "joined", f"{inv['role']} point={inv['point_id']} by={inv['created_by']}")
-        role_txt = "xo'jayin" if inv["role"] == "owner" else f"«{db.point_name(inv['point_id'])}» kassiri"
+        role_txt = {"owner": "xo'jayin", "admin": f"«{db.point_name(inv['point_id'])}» admini"}.get(
+            inv["role"], f"«{db.point_name(inv['point_id'])}» kassiri")
         for oid in db.owner_ids():
             if oid != tg_id:
                 try:
@@ -193,24 +244,18 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if u["name"] != name:
         db.set_user_name(tg_id, name)
 
-    if u["role"] == "owner":
-        await update.message.reply_text(OWNER_HELP, parse_mode=HTML, reply_markup=OWNER_KB)
-        if not db.points():
-            await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Chilonzor")
-    else:
-        await update.message.reply_text(CASHIER_HELP.format(point=escape(db.point_name(u["point_id"]))),
-                                        parse_mode=HTML, reply_markup=CASHIER_KB)
+    await update.message.reply_text(role_help(u), parse_mode=HTML,
+                                    reply_markup=OWNER_KB if u["role"] in MANAGERS else CASHIER_KB)
+    if u["role"] == "owner" and not db.points():
+        await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Chilonzor")
 
 
 async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     u = current_user(update)
     if not u:
         return await deny(update)
-    if u["role"] == "owner":
-        await update.message.reply_text(OWNER_HELP, parse_mode=HTML, reply_markup=OWNER_KB)
-    else:
-        await update.message.reply_text(CASHIER_HELP.format(point=escape(db.point_name(u["point_id"]))),
-                                        parse_mode=HTML, reply_markup=CASHIER_KB)
+    await update.message.reply_text(role_help(u), parse_mode=HTML,
+                                    reply_markup=OWNER_KB if u["role"] in MANAGERS else CASHIER_KB)
 
 
 @owner_only
@@ -239,11 +284,20 @@ async def points_cmd(update, ctx, u):
     await update.message.reply_text("\n".join(lines), parse_mode=HTML)
 
 
-@owner_only
+@manager_only
 async def add_cashier_cmd(update, ctx, u):
+    if u["role"] == "admin":
+        return await send_invite(update.message, ctx, u, "cashier", u["point_id"])
     if not db.points():
         return await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Nomi")
     await update.message.reply_text("Kassir qaysi tochkada ishlaydi?", reply_markup=points_kb("inv"))
+
+
+@owner_only
+async def add_admin_cmd(update, ctx, u):
+    if not db.points():
+        return await update.message.reply_text("Avval tochka qo'shing: /nuqta_qosh Nomi")
+    await update.message.reply_text("Admin qaysi tochkaga?", reply_markup=points_kb("ainv"))
 
 
 @owner_only
@@ -256,7 +310,8 @@ async def add_owner_cmd(update, ctx, u):
 async def send_invite(message, ctx, u, role: str, point_id):
     code = db.create_invite(role, point_id, u["tg_id"])
     link = f"https://t.me/{ctx.bot.username}?start=inv_{code}"
-    who = "xo'jayin" if role == "owner" else f"«{escape(db.point_name(point_id))}» kassiri"
+    who = {"owner": "xo'jayin", "admin": f"«{escape(db.point_name(point_id))}» admini"}.get(
+        role, f"«{escape(db.point_name(point_id))}» kassiri")
     await message.reply_text(
         f"🔗 Shu havolani {who}ga yuboring (48 soat, bir marta ishlaydi):\n\n{link}",
         parse_mode=HTML, disable_web_page_preview=True)
@@ -269,7 +324,8 @@ async def users_cmd(update, ctx, u):
         return await update.message.reply_text("Hech kim yo'q.")
     lines, kb = [], []
     for r in rows:
-        role = "👑 xo'jayin" if r["role"] == "owner" else f"🧾 {db.point_name(r['point_id'])}"
+        role = {"owner": "👑 xo'jayin", "admin": f"🛡 admin — {db.point_name(r['point_id'])}"}.get(
+            r["role"], f"🧾 kassir — {db.point_name(r['point_id'])}")
         status = "" if r["active"] else " — ❌ o'chirilgan"
         lines.append(f"{escape(r['name'] or str(r['tg_id']))} — {escape(role)}{status}")
         if r["tg_id"] != u["tg_id"] and r["tg_id"] not in OWNER_IDS:
@@ -281,14 +337,14 @@ async def users_cmd(update, ctx, u):
 
 # ---------- xodimlar ----------
 
-@owner_only
+@manager_only
 async def staff_cmd(update, ctx, u):
-    emps = db.employees()
+    emps = db.employees(point_id=scope(u))
     if not emps:
         return await update.message.reply_text("Xodim yo'q.\n" + ADD_EMP_HELP)
     today = business_today()
     start, _ = reports.month_range(today.year, today.month)
-    paid = {r["name"].lower(): r["paid"] for r in reports.employee_payments(start, today)}
+    paid = {r["name"].lower(): r["paid"] for r in reports.employee_payments(start, today, scope(u))}
     lines = [f"👥 <b>Xodimlar</b> — {reports.MONTHS[today.month]} oyi holati\n"]
     for e in emps:
         got = paid.get(e["name"].lower(), 0)
@@ -319,7 +375,7 @@ def _split_employee(part: str):
     return (name[:1].upper() + name[1:], salary or 0) if name else None
 
 
-@owner_only
+@manager_only
 async def add_employee_cmd(update, ctx, u):
     raw = " ".join(ctx.args)
     people, skipped = [], []
@@ -338,6 +394,9 @@ async def add_employee_cmd(update, ctx, u):
     if not people:
         return await update.message.reply_text(note + ADD_EMP_HELP)
     item = dict(type="emp", people=people, note=note, by=u["tg_id"])
+    if u["role"] == "admin":
+        item["point"] = u["point_id"]
+        return await finish_employee(update.message, item)
     pts = db.points()
     if len(pts) > 1:
         key = stash(ctx, item)
@@ -371,11 +430,11 @@ async def apply_salary(message, u, emp, sal: int):
                              "Bu xarajat emas — faqat oylik miqdori. Qoldiq 👥 Xodimlar da ko'rinadi.")
 
 
-@owner_only
+@manager_only
 async def salary_cmd(update, ctx, u):
     words = ctx.args
     if not words:  # ro'yxatdan tanlash
-        emps = db.employees()
+        emps = db.employees(point_id=scope(u))
         if not emps:
             return await update.message.reply_text("Avval ishchi qo'shing: /ishchi_qosh Ibrat")
         kb = [[InlineKeyboardButton(f"{e['name']} — {som(e['salary']) if e['salary'] else "oylik yo'q"}",
@@ -390,6 +449,8 @@ async def salary_cmd(update, ctx, u):
     else:
         return await update.message.reply_text(SALARY_HELP)
     sal = reports.parse_amount(amount)
+    if emp and not in_scope(u, emp["point_id"]):
+        emp = None
     if not emp:
         return await update.message.reply_text("Bunday ishchi topilmadi. Ro'yxat: /ishchilar\n\n" + SALARY_HELP)
     if sal is None:
@@ -397,13 +458,13 @@ async def salary_cmd(update, ctx, u):
     await apply_salary(update.message, u, emp, sal)
 
 
-@owner_only
+@manager_only
 async def fire_cmd(update, ctx, u):
     if len(ctx.args) != 1 or not ctx.args[0].isdigit():
         return await update.message.reply_text("Format: /boshat 3")
     eid = int(ctx.args[0])
     e = db.get_employee(eid)
-    if not e or not db.fire_employee(eid, business_today()):
+    if not e or not in_scope(u, e["point_id"]) or not db.fire_employee(eid, business_today()):
         return await update.message.reply_text("Bunday faol xodim topilmadi. /ishchilar")
     db.audit(u["tg_id"], "employee_fire", f"{eid} {e['name']}")
     await update.message.reply_text(f"✅ {e['name']} bo'shatildi. Oylik hisobotida shu oygacha ko'rinib turadi.")
@@ -463,7 +524,7 @@ async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
     offset = max(-7, min(0, parsed.day_offset))
     item = dict(type="exp", day=(business_today() + timedelta(days=offset)).isoformat(),
                 transcript=parsed.transcript, expenses=expenses, yandex=yandex, by=u["tg_id"])
-    if u["role"] == "cashier":
+    if u["role"] in ("cashier", "admin"):
         item["point"] = u["point_id"]
         key = stash(ctx, item)
         return await message.reply_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
@@ -571,10 +632,10 @@ async def owner_sale_cmd(update, ctx, u):
     await update.message.reply_text("Qaysi tochka savdosi?", reply_markup=points_kb(f"pt:{key}"))
 
 
-@owner_only
+@manager_only
 async def last_cmd(update, ctx, u):
-    rows = db.last_expenses(10)
-    ya = db.last_yandex(5)
+    rows = db.last_expenses(10, scope(u))
+    ya = db.last_yandex(5) if u["role"] == "owner" else []
     if not rows and not ya:
         return await update.message.reply_text("Hali yozuv yo'q.")
     lines = ["<b>Oxirgi xarajatlar</b>"]
@@ -586,14 +647,17 @@ async def last_cmd(update, ctx, u):
         lines.append("\n<b>Yandex</b>")
         lines += [f"№{r['id']} {r['day'][8:]}.{r['day'][5:7]} {escape(db.point_name(r['point_id']))}: {som(r['amount'])}"
                   for r in ya]
-    lines.append("\nO'chirish: /ochir № yoki /yandex_ochir №")
+    lines.append("\nO'chirish: /ochir №" + (" yoki /yandex_ochir №" if u["role"] == "owner" else ""))
     await update.message.reply_text("\n".join(lines), parse_mode=HTML)
 
 
-@owner_only
+@manager_only
 async def delete_cmd(update, ctx, u):
     if not ctx.args or not ctx.args[0].isdigit():
         return await update.message.reply_text("Format: /ochir 15")
+    old = db.get_expense(int(ctx.args[0]))
+    if not old or not in_scope(u, old["point_id"]):
+        return await update.message.reply_text("Bunday № topilmadi")
     row = db.delete_expense(int(ctx.args[0]))
     if not row:
         return await update.message.reply_text("Bunday № topilmadi")
@@ -636,31 +700,33 @@ async def send_report(message, kind: str, ref: date, point_id=None):
 
 
 def report_cmd(kind: str):
-    @owner_only
+    @manager_only
     async def handler(update, ctx, u):
         ref = parse_month_arg(ctx.args) if kind == "oy" else business_today()
         if ref is None:
             return await update.message.reply_text("Format: /oy 2026-10")
-        await send_report(update.message, kind, ref)
+        await send_report(update.message, kind, ref, scope(u))
     handler.__name__ = f"report_{kind}"
     return handler
 
 
-@owner_only
+@manager_only
 async def excel_cmd(update, ctx, u):
     ref = parse_month_arg(ctx.args)
     if ref is None:
         return await update.message.reply_text("Format: /excel 2026-10")
-    await send_excel(update.message, ref)
+    await send_excel(update.message, ref, scope(u))
 
 
-async def send_excel(message, ref: date):
+async def send_excel(message, ref: date, point_id=None):
     start, end = reports.month_range(ref.year, ref.month)
     os.makedirs("exports", exist_ok=True)
-    path = f"exports/hisobot_{start:%Y-%m}.xlsx"
-    reports.excel_report(start, end, path)
+    suffix = f"_{point_id}" if point_id else ""
+    path = f"exports/hisobot_{start:%Y-%m}{suffix}.xlsx"
+    reports.excel_report(start, end, path, point_id)
+    where = f" — {db.point_name(point_id)}" if point_id else ""
     with open(path, "rb") as fh:
-        await message.reply_document(fh, caption=f"{reports.MONTHS[ref.month]} {ref.year} — to'liq hisobot")
+        await message.reply_document(fh, caption=f"{reports.MONTHS[ref.month]} {ref.year}{where} — to'liq hisobot")
 
 
 # ---------- kassir ----------
@@ -706,7 +772,7 @@ async def ask_cash(message, st: dict):
 
 
 async def income_button(update: Update, ctx, u):
-    if u["role"] == "cashier":
+    if u["role"] in ("cashier", "admin"):
         return await start_income(update.message, ctx, u, u["point_id"], business_today())
     pts = db.points()
     if not pts:
@@ -749,11 +815,12 @@ async def save_sale(ctx, item: dict):
         text = (f"💰 Kirim: {escape(db.point_name(item['point']))}, {shift}-smena, {day:%d.%m}: naqd {som(item['cash'])}, "
                 f"karta {som(item['card'])}, jami <b>{som(item['cash'] + item['card'])}</b>"
                 f"\n<i>kiritdi: {escape((by['name'] if by else None) or str(item['by']))}</i>")
-        await notify_owners(ctx, text, skip=item["by"])
+        await notify_owners(ctx, text, skip=item["by"], point_id=item["point"])
 
 
-async def notify_owners(ctx, text: str, skip=None):
-    for oid in db.owner_ids():
+async def notify_owners(ctx, text: str, skip=None, point_id=None):
+    """Xo'jayinlarga va (point_id berilsa) o'sha tochka adminlariga xabar."""
+    for oid in dict.fromkeys(db.owner_ids() + db.admins_of(point_id)):
         if oid == skip:
             continue
         try:
@@ -790,7 +857,7 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await income_step(update, ctx, u, st, text)
     if text in (O_TODAY, O_WEEK, O_MONTH, O_XLSX, O_STAFF, O_ADMIN):
         ctx.user_data.pop("salary_for", None)
-    if u["role"] == "owner" and ctx.user_data.get("salary_for"):
+    if u["role"] in MANAGERS and ctx.user_data.get("salary_for"):
         eid = ctx.user_data["salary_for"]
         sal = reports.parse_amount(text)
         emp = db.get_employee(eid)
@@ -804,19 +871,19 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 "Kirim yozish uchun «💰 Kirim» ni, xarajat uchun «💸 Xarajat» ni bosing.", reply_markup=CASHIER_KB)
         return await expense_text(update, ctx, u, text)
 
-    ref = business_today()
+    ref, pid = business_today(), scope(u)
     if text == O_TODAY:
-        return await send_report(update.message, "bugun", ref)
+        return await send_report(update.message, "bugun", ref, pid)
     if text == O_WEEK:
-        return await send_report(update.message, "hafta", ref)
+        return await send_report(update.message, "hafta", ref, pid)
     if text == O_MONTH:
-        return await send_report(update.message, "oy", ref)
+        return await send_report(update.message, "oy", ref, pid)
     if text == O_XLSX:
-        return await send_excel(update.message, ref)
+        return await send_excel(update.message, ref, pid)
     if text == O_STAFF:
         return await staff_cmd(update, ctx)
     if text == O_ADMIN:
-        return await update.message.reply_text(OWNER_HELP, parse_mode=HTML)
+        return await update.message.reply_text(role_help(u), parse_mode=HTML)
     await expense_text(update, ctx, u, text)
 
 
@@ -844,9 +911,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 db.add_yandex(day, item["point"], y["amount"], y.get("note"), u["tg_id"])
             suffix = f"\n\n✅ Saqlandi" + (f" (№{ids[0]}–{ids[-1]})" if ids else "")
             await q.edit_message_text(exp_preview(item) + suffix, parse_mode=HTML)
-            if u["role"] == "cashier" and NOTIFY_OWNERS_ON_SALES:
+            if u["role"] in ("cashier", "admin") and NOTIFY_OWNERS_ON_SALES:
                 note = f"💸 <b>{escape(u['name'] or str(u['tg_id']))}</b> xarajat yozdi:\n" + exp_preview(item)
-                await notify_owners(ctx, note, skip=u["tg_id"])
+                await notify_owners(ctx, note, skip=u["tg_id"], point_id=item.get("point"))
         elif item["type"] == "sale":
             text = sale_preview(item)
             await save_sale(ctx, item)
@@ -884,25 +951,48 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         return await start_income(q.message, ctx, u, st["point"], business_today() - timedelta(days=1))
 
+    if u["role"] not in MANAGERS:
+        return await q.answer("Ruxsat yo'q", show_alert=True)
+
+    if action == "sal":  # sal:<employee_id> — oylik summasini kutamiz
+        emp = db.get_employee(int(parts[1]))
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not emp or not in_scope(u, emp["point_id"]):
+            return await q.message.reply_text("Ishchi topilmadi.")
+        ctx.user_data.pop("sale", None)
+        ctx.user_data["salary_for"] = emp["id"]
+        return await q.message.reply_text(f"{emp['name']} oyligini yozing (masalan 6000000):")
+
+    if action == "rp":  # rp:<kind>:<ref>:<point_id>
+        await q.answer()
+        pid = scope(u) or (int(parts[3]) or None)
+        return await send_report(q.message, parts[1], date.fromisoformat(parts[2]), pid)
+
+    # quyidagilar — faqat xo'jayin
     if u["role"] != "owner":
         return await q.answer("Ruxsat yo'q", show_alert=True)
+
+    if action == "tz":  # tz:yes / tz:no — hamma yozuvlarni o'chirish
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if parts[1] != "yes" or u["tg_id"] not in OWNER_IDS:
+            return await q.message.reply_text("Bekor qilindi. Hech narsa o'chirilmadi.")
+        n = db.wipe_records()
+        db.audit(u["tg_id"], "wipe_records", str(n))
+        return await q.message.reply_text(
+            f"🧹 O'chirildi: {n['expenses']} ta xarajat, {n['sales']} ta kirim, {n['yandex']} ta Yandex yozuvi.\n"
+            "Tochkalar, ishchilar va foydalanuvchilar joyida qoldi.")
+
+    if action == "ainv":  # ainv:<point_id> — tochka admini taklifi
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        return await send_invite(q.message, ctx, u, "admin", int(parts[1]))
 
     if action == "kp":  # kp:<point_id> — xo'jayin kirim uchun tochka tanladi
         await q.answer()
         await q.edit_message_reply_markup(None)
         return await start_income(q.message, ctx, u, int(parts[1]), business_today())
-
-    if action == "sal":  # sal:<employee_id> — oylik summasini kutamiz
-        if u["role"] != "owner":
-            return await q.answer("Ruxsat yo'q", show_alert=True)
-        emp = db.get_employee(int(parts[1]))
-        await q.answer()
-        await q.edit_message_reply_markup(None)
-        if not emp:
-            return await q.message.reply_text("Ishchi topilmadi.")
-        ctx.user_data.pop("sale", None)
-        ctx.user_data["salary_for"] = emp["id"]
-        return await q.message.reply_text(f"{emp['name']} oyligini yozing (masalan 6000000):")
 
     if action == "inv":  # inv:<point_id>
         await q.answer()
@@ -918,11 +1008,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.answer("O'zgartirildi")
         return await q.edit_message_reply_markup(None)
 
-    if action == "rp":  # rp:<kind>:<ref>:<point_id>
-        await q.answer()
-        pid = int(parts[3]) or None
-        return await send_report(q.message, parts[1], date.fromisoformat(parts[2]), pid)
-
 
 # ---------- avtomatik vazifalar ----------
 
@@ -931,7 +1016,7 @@ async def job_sales_reminder(ctx: ContextTypes.DEFAULT_TYPE):
     for p in db.points():
         if db.get_sale(day, p["id"]):
             continue
-        for cid in db.cashiers_of(p["id"]):
+        for cid in db.cashiers_of(p["id"]) + db.admins_of(p["id"]):
             try:
                 await ctx.bot.send_message(cid, f"⏰ Bugungi ({day:%d.%m}) kirimni yozishni unutmang: «💰 Kirim»")
             except Exception:
@@ -962,6 +1047,32 @@ async def job_backup(ctx: ContextTypes.DEFAULT_TYPE):
             await ctx.bot.send_document(OWNER_IDS[0], fh, caption="💾 Haftalik zahira nusxa. Saqlab qo'ying.")
 
 
+async def send_backup(bot, chat_id: int, caption: str):
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, f"backup_{business_today():%Y-%m-%d}.db")
+        src, dst = sqlite3.connect(DB_PATH), sqlite3.connect(path)
+        with dst:
+            src.backup(dst)
+        src.close()
+        dst.close()
+        with open(path, "rb") as fh:
+            await bot.send_document(chat_id, fh, caption=caption)
+
+
+@owner_only
+async def wipe_cmd(update, ctx, u):
+    if u["tg_id"] not in OWNER_IDS:
+        return await update.message.reply_text("Buni faqat asosiy xo'jayin qila oladi.")
+    await send_backup(ctx.bot, u["tg_id"], "💾 O'chirishdan oldingi to'liq nusxa. Saqlab qo'ying.")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🗑 Ha, hammasini o'chir", callback_data="tz:yes")],
+                               [InlineKeyboardButton("❌ Yo'q, bekor", callback_data="tz:no")]])
+    await update.message.reply_text(
+        "⚠️ <b>Barcha xarajat, kirim va Yandex yozuvlari o'chiriladi.</b>\n"
+        "Tochkalar, ishchilar ro'yxati, kassir va adminlar qoladi.\n"
+        "Yuqoridagi nusxa fayl bilan keyin hammasini tiklash mumkin.\n\nRostdan o'chiraymi?",
+        parse_mode=HTML, reply_markup=kb)
+
+
 async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE):
     log.exception("Unhandled error", exc_info=ctx.error)
     if isinstance(update, Update) and update.effective_message:
@@ -986,6 +1097,7 @@ def main():
         app.add_handler(CommandHandler(kind, report_cmd(kind)))
     for name, fn in [("excel", excel_cmd), ("nuqta_qosh", add_point_cmd), ("nuqtalar", points_cmd),
                      ("kassir_qosh", add_cashier_cmd), ("hujayin_qosh", add_owner_cmd),
+                     ("admin_qosh", add_admin_cmd), ("tozalash", wipe_cmd),
                      ("foydalanuvchilar", users_cmd), ("ishchilar", staff_cmd),
                      ("ishchi_qosh", add_employee_cmd), ("oylik", salary_cmd), ("boshat", fire_cmd),
                      ("yandex", yandex_cmd), ("savdo", owner_sale_cmd), ("oxirgi", last_cmd),

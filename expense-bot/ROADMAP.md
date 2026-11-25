@@ -18,22 +18,27 @@ Shundan keyin kod GitHub'da, `claude/telegram-expense-tracking-bot-kmd0y7` branc
 
 ## 1. Kim nima qila oladi
 
-| | Xo'jayin (2-3 kishi) | Xodim / kassir (har tochkada) | Begona odam |
-|---|---|---|---|
-| Menyusi | 💸 Xarajat, 💰 Kirim + hisobotlar | faqat **💸 Xarajat** va **💰 Kirim** | — |
-| 💰 Kirim: smena oxirida naqd/karta | ✅ | ✅ (o'z tochkasiga) | ❌ |
-| 💸 Xarajat: ovoz yoki matn bilan | ✅ | ✅ (o'z tochkasiga; xo'jayinlarga xabar boradi) | ❌ |
-| Yandex tushumini yozish | ✅ | ❌ | ❌ |
-| Hisobot, Excel | ✅ | ❌ (faqat o'z tochkasining oxirgi 7 kunini ko'radi) | ❌ |
-| Tochka, kassir, xo'jayin qo'shish/o'chirish | ✅ | ❌ | ❌ |
-| Ishchini ishga olish, oyligini o'zgartirish, bo'shatish | ✅ | ❌ | ❌ |
-| Xatolarni o'chirish | ✅ | o'z savdosini qayta kiritib almashtiradi | ❌ |
+| | Xo'jayin | Tochka admini | Xodim / kassir | Begona odam |
+|---|---|---|---|---|
+| Qaysi tochkalar | hammasi | faqat o'z tochkasi | faqat o'z tochkasi | — |
+| Menyusi | to'liq menyu | to'liq menyu (o'z tochkasi bo'yicha) | faqat **💸 Xarajat** va **💰 Kirim** | — |
+| 💰 Kirim (smena → naqd → karta) | ✅ | ✅ | ✅ | ❌ |
+| 💸 Xarajat: ovoz yoki matn | ✅ | ✅ | ✅ | ❌ |
+| Hisobot va Excel | ✅ hamma tochka | ✅ o'z tochkasi | ❌ | ❌ |
+| Ishchi qo'shish, oylik, bo'shatish | ✅ | ✅ o'z tochkasi | ❌ | ❌ |
+| Kassir qo'shish | ✅ | ✅ o'z tochkasiga | ❌ | ❌ |
+| Xato xarajatni o'chirish (/ochir) | ✅ | ✅ o'z tochkasi | savdoni qayta kiritib almashtiradi | ❌ |
+| Yandex tushumi | ✅ | ❌ | ❌ | ❌ |
+| Tochka, admin, xo'jayin qo'shish; /foydalanuvchilar | ✅ | ❌ | ❌ | ❌ |
+| /tozalash — hamma yozuvlarni o'chirish | ✅ (faqat asosiy xo'jayin) | ❌ | ❌ | ❌ |
+
+Kassir yoki admin xarajat/kirim yozsa, xo'jayinga va o'sha tochka adminiga xabar boradi.
 
 **Botga qanday kiriladi:**
 - **Asosiy xo'jayinlar** `.env` dagi `OWNER_IDS` ga yoziladi. Ular botdan hech qachon chiqarib yuborilmaydi.
-- **Qolganlar** (kassirlar, 3-xo'jayin) faqat **taklif havolasi** orqali kiradi. Xo'jayin `/kassir_qosh` ni bosadi, tochkani tanlaydi, bot havola beradi. Havolani kassirga Telegram'da yuborasiz, u bosadi va tayyor. Havola 48 soat yashaydi va bir marta ishlaydi.
+- **Qolganlar** faqat **taklif havolasi** orqali kiradi. Admin uchun xo'jayin `/admin_qosh`, kassir uchun `/kassir_qosh` ni bosadi, tochkani tanlaydi, bot havola beradi (admin `/kassir_qosh` bossa, havola darhol o'z tochkasiga chiqadi). Havolani kassirga Telegram'da yuborasiz, u bosadi va tayyor. Havola 48 soat yashaydi va bir marta ishlaydi.
 - Havolasiz kirgan odam «Ruxsat yo'q» degan javob oladi va hech narsani ko'rmaydi.
-- Ishdan ketgan kassir `/foydalanuvchilar` orqali bitta tugma bilan o'chiriladi.
+- Ishdan ketgan kassir, admin yoki ortiqcha xo'jayin `/foydalanuvchilar` orqali bitta tugma bilan o'chiriladi.
 
 ---
 

@@ -222,10 +222,10 @@ def detail_block(d: Data) -> str:
     return "\n".join(parts)
 
 
-def employee_payments(start: date, end: date) -> list[dict]:
-    """Har bir xodim: oyligi, shu davrda olgani, qoldiq."""
+def employee_payments(start: date, end: date, point_id=None) -> list[dict]:
+    """Har bir xodim: oyligi, shu davrda olgani, qoldiq. point_id — faqat o'sha tochka."""
     paid_by_id, paid_by_name = defaultdict(int), defaultdict(int)
-    for r in db.expenses_between(start, end):
+    for r in db.expenses_between(start, end, point_id):
         if r["category"] != "ishchilar":
             continue
         if r["employee_id"]:
@@ -233,7 +233,7 @@ def employee_payments(start: date, end: date) -> list[dict]:
         else:
             paid_by_name[(r["person"] or "—").strip().lower()] += r["amount"]
     out = []
-    for e in db.employees(active_only=False):
+    for e in db.employees(active_only=False, point_id=point_id):
         if not e["active"] and (not e["fired_on"] or e["fired_on"] < start.isoformat()):
             continue
         paid = paid_by_id.pop(e["id"], 0) + paid_by_name.pop(e["name"].lower(), 0)
@@ -244,8 +244,8 @@ def employee_payments(start: date, end: date) -> list[dict]:
     return out
 
 
-def salary_block(start: date, end: date) -> str | None:
-    rows = employee_payments(start, end)
+def salary_block(start: date, end: date, point_id=None) -> str | None:
+    rows = employee_payments(start, end, point_id)
     if not rows:
         return None
     lines = []
@@ -277,8 +277,8 @@ def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
         if pp:
             out.append(pp)
         out.append("<b>Kunma-kun</b>\n" + daily_block(d))
-        if kind == "oy" and point_id is None:
-            sb = salary_block(start, end)
+        if kind == "oy":
+            sb = salary_block(start, end, point_id)
             if sb:
                 out.append(sb)
     out += missing_sales(d)
@@ -313,9 +313,10 @@ def items_breakdown(rows, category: str) -> list[tuple[str, int, int]]:
     return sorted(((label[k], total[k], times[k]) for k in total), key=lambda x: -x[1])
 
 
-def excel_report(start: date, end: date, path: str) -> str:
-    d = collect(start, end)
-    pts = {p["id"]: p["name"] for p in db.points(active_only=False)}
+def excel_report(start: date, end: date, path: str, point_id=None) -> str:
+    """point_id berilsa — faqat o'sha tochka (admin uchun)."""
+    d = collect(start, end, point_id)
+    pts = {p["id"]: p["name"] for p in db.points(active_only=False) if not point_id or p["id"] == point_id}
     wb = Workbook()
     bold = Font(bold=True)
     head = PatternFill("solid", fgColor="DDEBF7")
@@ -328,7 +329,7 @@ def excel_report(start: date, end: date, path: str) -> str:
     ws.append(["Ko'rsatkich", "Summa"])
     for label, val in [("Naqd", d.cash), ("Karta", d.card), ("Yandex", d.ya), ("JAMI TUSHUM", d.income), ("", None)]:
         ws.append([label, val])
-    workers = [r for r in employee_payments(start, end) if r["paid"] or r["salary"]]
+    workers = [r for r in employee_payments(start, end, point_id) if r["paid"] or r["salary"]]
     for key, name in CATEGORIES.items():
         ws.append([name, cats.get(key, 0)])
         if key != "ishchilar":  # bozorlik, ijara, prochee — har bir xarajat nomi bilan
@@ -348,8 +349,9 @@ def excel_report(start: date, end: date, path: str) -> str:
             + sum(r["amount"] for r in d.yandex if r["point_id"] == pid)
         exp = sum(r["amount"] for r in d.expenses if r["point_id"] == pid)
         ws.append([name, inc, exp, inc - exp])
-    ws.append(["Umumiy", sum(r["amount"] for r in d.yandex if r["point_id"] is None),
-               sum(r["amount"] for r in d.expenses if r["point_id"] is None), None])
+    if not point_id:
+        ws.append(["Umumiy", sum(r["amount"] for r in d.yandex if r["point_id"] is None),
+                   sum(r["amount"] for r in d.expenses if r["point_id"] is None), None])
 
     # 2. Kunma-kun
     ws2 = wb.create_sheet("Kunma-kun")
@@ -395,7 +397,7 @@ def excel_report(start: date, end: date, path: str) -> str:
     # 6. Ishchilar
     ws6 = wb.create_sheet("Ishchilar")
     ws6.append(["Ishchi", "Tochka", "Oylik", "Oldi", "Qoldi", "Holati"])
-    for r in employee_payments(start, end):
+    for r in employee_payments(start, end, point_id):
         ws6.append([r["name"], r["point"], r["salary"], r["paid"], r["left"], "ishlaydi" if r["active"] else "bo'shagan"])
 
     for sheet in wb.worksheets:

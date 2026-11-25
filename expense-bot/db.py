@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS points (
 CREATE TABLE IF NOT EXISTS users (
     tg_id INTEGER PRIMARY KEY,
     name TEXT,
-    role TEXT NOT NULL CHECK (role IN ('owner', 'cashier')),
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier')),
     point_id INTEGER REFERENCES points(id),
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -104,6 +104,31 @@ def init():
     with conn() as c:
         c.executescript(SCHEMA)
         _migrate_sales_shift(c)
+        _migrate_users_admin(c)
+
+
+def _migrate_users_admin(c):
+    """Eski bazada users.role faqat owner/cashier bo'lishi mumkin edi — 'admin' ni qo'shamiz."""
+    sql = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()["sql"]
+    if "'admin'" in sql:
+        return
+    c.commit()
+    c.execute("PRAGMA foreign_keys=OFF")
+    c.executescript("""
+        CREATE TABLE users_new (
+            tg_id INTEGER PRIMARY KEY,
+            name TEXT,
+            role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier')),
+            point_id INTEGER REFERENCES points(id),
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO users_new(tg_id, name, role, point_id, active, created_at)
+            SELECT tg_id, name, role, point_id, active, created_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_new RENAME TO users;
+    """)
+    c.execute("PRAGMA foreign_keys=ON")
 
 
 def _migrate_sales_shift(c):
@@ -188,6 +213,14 @@ def owner_ids() -> list[int]:
         return [r["tg_id"] for r in c.execute("SELECT tg_id FROM users WHERE role='owner' AND active=1")]
 
 
+def admins_of(point_id) -> list[int]:
+    if not point_id:
+        return []
+    with conn() as c:
+        return [r["tg_id"] for r in c.execute(
+            "SELECT tg_id FROM users WHERE role='admin' AND active=1 AND point_id=?", (point_id,))]
+
+
 def cashiers_of(point_id: int) -> list[int]:
     with conn() as c:
         return [r["tg_id"] for r in c.execute(
@@ -228,10 +261,17 @@ def add_employee(name: str, point_id, salary: int, hired_on: date) -> int:
         ).lastrowid
 
 
-def employees(active_only: bool = True) -> list[sqlite3.Row]:
-    q = "SELECT * FROM employees" + (" WHERE active=1" if active_only else "") + " ORDER BY point_id, name"
+def employees(active_only: bool = True, point_id=None) -> list[sqlite3.Row]:
+    """point_id berilsa — faqat o'sha tochka ishchilari (admin uchun)."""
+    where, args = [], []
+    if active_only:
+        where.append("active=1")
+    if point_id:
+        where.append("point_id=?")
+        args.append(point_id)
+    q = "SELECT * FROM employees" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY point_id, name"
     with conn() as c:
-        return c.execute(q).fetchall()
+        return c.execute(q, args).fetchall()
 
 
 def get_employee(emp_id: int):
@@ -287,9 +327,23 @@ def expenses_between(start: date, end: date, point_id=None) -> list[sqlite3.Row]
                          (start.isoformat(), end.isoformat(), *args)).fetchall()
 
 
-def last_expenses(n: int = 10) -> list[sqlite3.Row]:
+def last_expenses(n: int = 10, point_id=None) -> list[sqlite3.Row]:
     with conn() as c:
+        if point_id:
+            return c.execute("SELECT * FROM expenses WHERE point_id=? ORDER BY id DESC LIMIT ?",
+                             (point_id, n)).fetchall()
         return c.execute("SELECT * FROM expenses ORDER BY id DESC LIMIT ?", (n,)).fetchall()
+
+
+def get_expense(expense_id: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM expenses WHERE id=?", (expense_id,)).fetchone()
+
+
+def wipe_records() -> dict:
+    """Barcha xarajat, kirim va Yandex yozuvlarini o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
+    with conn() as c:
+        return {t: c.execute(f"DELETE FROM {t}").rowcount for t in ("expenses", "sales", "yandex")}
 
 
 def delete_expense(expense_id: int):
