@@ -26,6 +26,7 @@ Shundan keyin kod GitHub'da, `claude/telegram-expense-tracking-bot-kmd0y7` branc
 | 💰 Kirim, 💸 Xarajat | ✅ | faqat kunlik hisobot ichida | ✅ o'z tochkasiga | ❌ |
 | Hisobot, Excel, ishchilar, oylik | ✅ | ❌ | ❌ | ❌ |
 | Tochka, admin, kassir, xo'jayin qo'shish; /foydalanuvchilar | ✅ | ❌ | ❌ | ❌ |
+| 📒 Qarzlar (kimga qancha qarzmiz, to'lovlar) | ✅ | ❌ | ❌ | ❌ |
 | /tozalash — hamma yozuvlarni o'chirish | ✅ (faqat asosiy xo'jayin) | ❌ | ❌ | ❌ |
 
 **Admin har kuni ertalab** «📝 Kunlik hisobot» ni bosadi va kechagi kunni yozadi: jami savdo (1+2 smena) → xarajatlar (ishchilar kunligi, non, mayda-chuyda; matn yoki ovoz) → karta/schetga tushgani → kassada qolgan naqd. Bot `savdo − karta − xarajat` ni hisoblab, kassadagi naqd bilan solishtiradi va farqni ko'rsatadi (⚠️ kam / ortiqcha). Saqlangach xo'jayinga to'liq hisobot keladi. Soat 10:00 gacha yozilmasa, adminga eslatma boradi. Admin hisoboti o'sha kun uchun kassir kiritgan smena kirimlarining o'rnini egallaydi.
@@ -195,6 +196,15 @@ Har smena alohida saqlanadi, hisobotda kunlik jami va har smena alohida ko'rinad
 Vaqtlarni `.env` dagi `DIGEST_TIME`, `SALES_REMINDER_TIME`, `BACKUP_*` orqali o'zgartirish mumkin.
 
 ---
+
+## 5.1. Qarzlar (faqat xo'jayin)
+
+Bosh menyuda **📒 Qarzlar** tugmasi: go'shtchi, bozor, ta'minotchilarga qarzlarimiz.
+- **➕ Qarz yozish** — bitta xabar: `Go'shtchi Akmal 2500000 mol go'shti 20 kg` (kim — summa — izoh). Shu nom bilan yana yozilsa, summasi qo'shiladi.
+- **💵 Qarz to'lash** — kimga to'laganingizni tanlaysiz, summani yozasiz yoki «To'liq to'lash» ni bosasiz. Qarzdan ko'p yozib bo'lmaydi.
+- **📜 Tarix** — har bir odam bo'yicha qarz va to'lovlar ro'yxati; xato yozuv `/qarz_ochir №` bilan o'chiriladi.
+- Excel'da **Qarzlar** varag'i: har kimga jami olingan, to'langan, qoldiq va shu oydagi harakatlar.
+- Qarzlar foyda/zarar hisobiga avtomatik qo'shilmaydi (ikki marta hisoblanmasligi uchun). `/tozalash` qarzlarga tegmaydi.
 
 ## 6. Yandex Dostavka
 

@@ -82,6 +82,22 @@ CREATE TABLE IF NOT EXISTS closings (           -- admin har kuni ertalab yozadi
     UNIQUE (day, point_id)
 );
 
+CREATE TABLE IF NOT EXISTS creditors (          -- kimga qarzdormiz (go'shtchi, bozor, ta'minotchi...)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS debt_moves (         -- + qarz olindi, − qarz to'landi
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    creditor_id INTEGER NOT NULL REFERENCES creditors(id),
+    day TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    note TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,                        -- hisobga tushgan kun
@@ -509,3 +525,67 @@ def user_names() -> dict[int, tuple[str, str]]:
     """tg_id -> (ism, rol)"""
     with conn() as c:
         return {r["tg_id"]: (r["name"] or str(r["tg_id"]), r["role"]) for r in c.execute("SELECT * FROM users")}
+
+
+# ---------- qarzlar (biz boshqalarga qarzdormiz) ----------
+
+def creditor_id(name: str) -> int:
+    """Ism bo'yicha topadi (katta-kichik harfsiz), yo'q bo'lsa yaratadi."""
+    name = " ".join(name.split())
+    with conn() as c:
+        r = c.execute("SELECT id FROM creditors WHERE name=?", (name,)).fetchone()
+        if r:
+            return r["id"]
+        return c.execute("INSERT INTO creditors(name) VALUES (?)", (name,)).lastrowid
+
+
+def get_creditor(cid: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM creditors WHERE id=?", (cid,)).fetchone()
+
+
+def add_debt_move(cid: int, day: date, amount: int, note, by: int) -> int:
+    with conn() as c:
+        return c.execute("INSERT INTO debt_moves(creditor_id, day, amount, note, created_by) VALUES (?,?,?,?,?)",
+                         (cid, day.isoformat(), amount, note, by)).lastrowid
+
+
+def debt_balances(only_open: bool = True) -> list[sqlite3.Row]:
+    """Har bir kreditor: jami olingan, to'langan, qoldiq. Kattasidan kichigiga."""
+    with conn() as c:
+        rows = c.execute(
+            "SELECT c.id, c.name,"
+            " COALESCE(SUM(CASE WHEN m.amount > 0 THEN m.amount END), 0) AS taken,"
+            " COALESCE(-SUM(CASE WHEN m.amount < 0 THEN m.amount END), 0) AS paid,"
+            " COALESCE(SUM(m.amount), 0) AS balance, MAX(m.day) AS last_day"
+            " FROM creditors c LEFT JOIN debt_moves m ON m.creditor_id = c.id"
+            " GROUP BY c.id ORDER BY balance DESC, c.name").fetchall()
+    return [r for r in rows if r["balance"] != 0] if only_open else rows
+
+
+def debt_balance(cid: int) -> int:
+    with conn() as c:
+        return c.execute("SELECT COALESCE(SUM(amount), 0) AS b FROM debt_moves WHERE creditor_id=?",
+                         (cid,)).fetchone()["b"]
+
+
+def debt_history(cid: int, n: int = 15) -> list[sqlite3.Row]:
+    with conn() as c:
+        return c.execute("SELECT * FROM debt_moves WHERE creditor_id=? ORDER BY id DESC LIMIT ?",
+                         (cid, n)).fetchall()
+
+
+def debt_moves_between(start: date, end: date) -> list[sqlite3.Row]:
+    with conn() as c:
+        return c.execute("SELECT m.*, c.name FROM debt_moves m JOIN creditors c ON c.id = m.creditor_id"
+                         " WHERE m.day BETWEEN ? AND ? ORDER BY m.day, m.id",
+                         (start.isoformat(), end.isoformat())).fetchall()
+
+
+def delete_debt_move(move_id: int):
+    with conn() as c:
+        row = c.execute("SELECT m.*, c.name FROM debt_moves m JOIN creditors c ON c.id = m.creditor_id"
+                        " WHERE m.id=?", (move_id,)).fetchone()
+        if row:
+            c.execute("DELETE FROM debt_moves WHERE id=?", (move_id,))
+        return row

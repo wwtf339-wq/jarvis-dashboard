@@ -37,8 +37,10 @@ som = reports.som
 # ---------- klaviaturalar ----------
 O_TODAY, O_WEEK, O_MONTH = "📅 Bugun", "📆 Hafta", "🗓 Oy"
 O_XLSX, O_STAFF, O_ADMIN = "📊 Excel", "👥 Xodimlar", "⚙️ Boshqaruv"
+O_DEBT = "📒 Qarzlar"
 B_EXP, B_INC = "💸 Xarajat", "💰 Kirim"
-OWNER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC], [O_TODAY, O_WEEK, O_MONTH], [O_XLSX, O_STAFF, O_ADMIN]],
+OWNER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC], [O_TODAY, O_WEEK, O_MONTH], [O_XLSX, O_STAFF],
+                                [O_DEBT, O_ADMIN]],
                                resize_keyboard=True)
 CASHIER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC]], resize_keyboard=True)
 B_DAY = "📝 Kunlik hisobot"
@@ -80,6 +82,9 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /oxirgi — oxirgi yozuvlar
 /ochir № — xarajatni o'chirish
 /yandex_ochir № — Yandex yozuvini o'chirish
+
+📒 <b>Qarzlar</b> — «📒 Qarzlar» tugmasi yoki /qarzlar
+/qarz_ochir № — xato yozilgan qarz/to'lovni o'chirish
 
 📝 <b>Kunlik hisobotlar (adminlar)</b>
 /kunlik — oxirgi hisobotlar
@@ -813,6 +818,7 @@ async def cancel_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.pop("sale", None)
     ctx.user_data.pop("salary_for", None)
     ctx.user_data.pop("close", None)
+    ctx.user_data.pop("debt", None)
     await update.message.reply_text("Bekor qilindi.")
 
 
@@ -838,6 +844,123 @@ async def notify_owners(ctx, text: str, skip=None, point_id=None):
             await ctx.bot.send_message(oid, text, parse_mode=HTML)
         except Exception:
             log.warning("owner %s notify failed", oid)
+
+
+# ---------- qarzlar (xo'jayin) ----------
+
+DEBT_RE = re.compile(r"^(?P<name>.+?)\s+(?P<amount>\d[\d\s.,]*(?:\s*(?:ming|mln|million|k))?)"
+                     r"(?:\s*(?:so'm|som|sum))?(?:\s+(?P<note>.+))?$", re.IGNORECASE)
+
+
+def debts_text() -> str:
+    rows = db.debt_balances()
+    if not rows:
+        return "📒 <b>Qarzlar</b>\n\nHozir hech kimga qarzimiz yo'q ✅"
+    lines = ["📒 <b>Qarzlarimiz</b>\n"]
+    for r in rows:
+        last = f" · oxirgi: {r['last_day'][8:]}.{r['last_day'][5:7]}" if r["last_day"] else ""
+        if r["balance"] > 0:
+            lines.append(f"• <b>{escape(r['name'])}</b> — {som(r['balance'])}{last}")
+        else:
+            lines.append(f"• <b>{escape(r['name'])}</b> — ortiqcha to'langan {som(-r['balance'])}{last}")
+    total = sum(r["balance"] for r in rows if r["balance"] > 0)
+    lines.append(f"\n<b>Jami qarz: {som(total)}</b>")
+    return "\n".join(lines)
+
+
+def debts_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Qarz yozish", callback_data="qz:add"),
+         InlineKeyboardButton("💵 Qarz to'lash", callback_data="qz:pay")],
+        [InlineKeyboardButton("📜 Tarix", callback_data="qz:hist")]])
+
+
+@owner_only
+async def debts_cmd(update, ctx, u):
+    ctx.user_data.pop("debt", None)
+    await update.message.reply_text(debts_text(), parse_mode=HTML, reply_markup=debts_kb())
+
+
+def creditors_kb(prefix: str, only_open: bool):
+    rows = db.debt_balances(only_open=only_open)
+    return InlineKeyboardMarkup([[InlineKeyboardButton(
+        f"{r['name']} — {som(r['balance'])}"[:60], callback_data=f"{prefix}:{r['id']}")] for r in rows[:30]])
+
+
+async def debt_text(update, ctx, u, st: dict, text: str):
+    msg = update.message
+    if st["step"] == "add":
+        m = DEBT_RE.match(text.strip())
+        amount = reports.parse_amount(m["amount"]) if m else None
+        if not m or not amount:
+            return await msg.reply_text("Masalan: <i>Go'shtchi Akmal 2500000 mol go'shti 20 kg</i>\n"
+                                        "(kim — summa — izoh). Bekor qilish: /bekor", parse_mode=HTML)
+        ctx.user_data.pop("debt", None)
+        name = " ".join(m["name"].split())
+        with db.conn() as c:  # oldin yozilgan bo'lsa — ro'yxatdagi nomi bilan
+            known = c.execute("SELECT name FROM creditors WHERE name=?", (name,)).fetchone()
+        name = known["name"] if known else name[:1].upper() + name[1:]
+        item = dict(type="debt", name=name, amount=amount, note=(m["note"] or "").strip() or None,
+                    day=business_today().isoformat(), by=u["tg_id"])
+        key = stash(ctx, item)
+        return await msg.reply_text(debt_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+    if st["step"] == "pay":
+        amount = reports.parse_amount(text)
+        if not amount:
+            return await msg.reply_text("Faqat summani yozing, masalan 1000000. Bekor qilish: /bekor")
+        ctx.user_data.pop("debt", None)
+        return await debt_pay_preview(msg, ctx, u, st["cid"], amount)
+
+
+def debt_preview(item: dict) -> str:
+    if item["type"] == "debt":
+        old = 0
+        with db.conn() as c:
+            r = c.execute("SELECT id FROM creditors WHERE name=?", (item["name"],)).fetchone()
+        if r:
+            old = db.debt_balance(r["id"])
+        note = f"\n📝 {escape(item['note'])}" if item.get("note") else ""
+        return (f"➕ <b>Qarz yozish</b>\n\n👤 {escape(item['name'])}\n💰 <b>{som(item['amount'])}</b>{note}\n\n"
+                f"Qarz: {som(old)} → <b>{som(old + item['amount'])}</b>")
+    cr = db.get_creditor(item["cid"])
+    old = db.debt_balance(item["cid"])
+    return (f"💵 <b>Qarz to'lash</b>\n\n👤 {escape(cr['name'])}\n💰 <b>{som(item['amount'])}</b>\n\n"
+            f"Qarz: {som(old)} → <b>{som(old - item['amount'])}</b>")
+
+
+async def debt_pay_preview(message, ctx, u, cid: int, amount: int):
+    bal = db.debt_balance(cid)
+    if amount > bal:
+        return await message.reply_text(f"Qarz {som(bal)}, siz {som(amount)} yozdingiz — qarzdan ko'p. "
+                                         "To'g'ri summani yozing: «💵 Qarz to'lash».")
+    item = dict(type="debtpay", cid=cid, amount=amount, day=business_today().isoformat(), by=u["tg_id"])
+    key = stash(ctx, item)
+    await message.reply_text(debt_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+
+
+async def save_debt(u, item: dict) -> str:
+    day = date.fromisoformat(item["day"])
+    if item["type"] == "debt":
+        cid = db.creditor_id(item["name"])
+        mid = db.add_debt_move(cid, day, item["amount"], item.get("note"), u["tg_id"])
+    else:
+        cid = item["cid"]
+        mid = db.add_debt_move(cid, day, -item["amount"], "to'lov", u["tg_id"])
+    db.audit(u["tg_id"], item["type"], f"{mid} {cid} {item['amount']}")
+    return f"✅ Saqlandi (№{mid}). {db.get_creditor(cid)['name']} — qolgan qarz: <b>{som(db.debt_balance(cid))}</b>"
+
+
+@owner_only
+async def debt_delete_cmd(update, ctx, u):
+    if not ctx.args or not ctx.args[0].isdigit():
+        return await update.message.reply_text("Format: /qarz_ochir 12   (№ ni «📜 Tarix» da ko'rasiz)")
+    row = db.delete_debt_move(int(ctx.args[0]))
+    if not row:
+        return await update.message.reply_text("Bunday № topilmadi.")
+    db.audit(u["tg_id"], "debt_delete", f"{row['id']} {row['name']} {row['amount']}")
+    kind = "qarz" if row["amount"] > 0 else "to'lov"
+    await update.message.reply_text(f"🗑 O'chirildi: {row['name']} — {kind} {som(abs(row['amount']))}. "
+                                    f"Qolgan qarz: {som(db.debt_balance(row['creditor_id']))}")
 
 
 # ---------- admin: kunlik hisobot ----------
@@ -1056,8 +1179,11 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     st = ctx.user_data.get("sale")
     if st:
         return await income_step(update, ctx, u, st, text)
-    if text in (O_TODAY, O_WEEK, O_MONTH, O_XLSX, O_STAFF, O_ADMIN):
+    if text in (O_TODAY, O_WEEK, O_MONTH, O_XLSX, O_STAFF, O_ADMIN, O_DEBT, B_EXP, B_INC):
         ctx.user_data.pop("salary_for", None)
+        ctx.user_data.pop("debt", None)
+    if u["role"] == "owner" and ctx.user_data.get("debt"):
+        return await debt_text(update, ctx, u, ctx.user_data["debt"], text)
     if u["role"] in MANAGERS and ctx.user_data.get("salary_for"):
         eid = ctx.user_data["salary_for"]
         sal = reports.parse_amount(text)
@@ -1085,6 +1211,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await staff_cmd(update, ctx)
     if text == O_ADMIN:
         return await update.message.reply_text(role_help(u), parse_mode=HTML)
+    if text == O_DEBT:
+        return await debts_cmd(update, ctx)
     await expense_text(update, ctx, u, text)
 
 
@@ -1119,6 +1247,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             text = sale_preview(item)
             await save_sale(ctx, item)
             await q.edit_message_text(text.split("\n\n⚠️")[0] + "\n\n✅ Saqlandi", parse_mode=HTML)
+        elif item["type"] in ("debt", "debtpay"):
+            result = await save_debt(u, item)
+            await q.edit_message_text(debt_preview(item).split("\n\nQarz:")[0] + "\n\n" + result, parse_mode=HTML)
         elif item["type"] == "close":
             result = await save_close(ctx, u, item)
             await q.edit_message_text(close_preview(item) + "\n\n" + result, parse_mode=HTML)
@@ -1209,6 +1340,52 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🧹 O'chirildi: {n['expenses']} ta xarajat, {n['sales']} ta kirim, {n['yandex']} ta Yandex, "
             f"{n['closings']} ta kunlik hisobot.\n"
             "Tochkalar, ishchilar va foydalanuvchilar joyida qoldi.")
+
+    if action == "qz":  # qz:add / qz:pay / qz:hist — qarzlar menyusi
+        await q.answer()
+        ctx.user_data.pop("sale", None)
+        ctx.user_data.pop("salary_for", None)
+        if parts[1] == "add":
+            ctx.user_data["debt"] = dict(step="add")
+            return await q.message.reply_text(
+                "➕ Kimga va qancha qarz bo'ldik? Bitta xabarda yozing:\n"
+                "<i>Go'shtchi Akmal 2500000 mol go'shti 20 kg</i>\n<i>Bozor Sardor 800 ming sabzavot</i>\n\n"
+                "Avval yozilgan odam bo'lsa, xuddi o'sha nom bilan yozing — summasi qo'shiladi.\nBekor qilish: /bekor",
+                parse_mode=HTML)
+        if not db.debt_balances(only_open=parts[1] == "pay"):
+            return await q.message.reply_text("Hali qarz yozilmagan." if parts[1] == "hist" else "To'lanadigan qarz yo'q ✅")
+        if parts[1] == "pay":
+            return await q.message.reply_text("💵 Kimga to'ladingiz?", reply_markup=creditors_kb("qp", True))
+        return await q.message.reply_text("📜 Kimning tarixini ko'rasiz?", reply_markup=creditors_kb("qh", False))
+
+    if action == "qp":  # qp:<creditor_id> — to'lov summasini so'raymiz
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        cid, bal = int(parts[1]), db.debt_balance(int(parts[1]))
+        ctx.user_data["debt"] = dict(step="pay", cid=cid)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"To'liq to'lash — {som(bal)}", callback_data=f"qf:{cid}")]])
+        return await q.message.reply_text(
+            f"👤 {escape(db.get_creditor(cid)['name'])} — qarz <b>{som(bal)}</b>\n\n"
+            "Qancha to'ladingiz? Summani yozing yoki pastdagi tugmani bosing.", parse_mode=HTML, reply_markup=kb)
+
+    if action == "qf":  # qf:<creditor_id> — to'liq to'lash
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        ctx.user_data.pop("debt", None)
+        cid = int(parts[1])
+        return await debt_pay_preview(q.message, ctx, u, cid, db.debt_balance(cid))
+
+    if action == "qh":  # qh:<creditor_id> — tarix
+        await q.answer()
+        cid = int(parts[1])
+        rows = db.debt_history(cid)
+        lines = [f"📜 <b>{escape(db.get_creditor(cid)['name'])}</b> — qarz {som(db.debt_balance(cid))}\n"]
+        for r in rows:
+            sign = "➕ qarz" if r["amount"] > 0 else "💵 to'landi"
+            note = f" — {escape(r['note'])}" if r["note"] and r["amount"] > 0 else ""
+            lines.append(f"№{r['id']} {r['day'][8:]}.{r['day'][5:7]} {sign} {som(abs(r['amount']))}{note}")
+        lines.append("\nXato yozuvni o'chirish: /qarz_ochir №")
+        return await q.message.reply_text("\n".join(lines), parse_mode=HTML)
 
     if action == "ainv":  # ainv:<point_id> — tochka admini taklifi
         await q.answer()
@@ -1325,6 +1502,7 @@ def main():
                      ("kassir_qosh", add_cashier_cmd), ("hujayin_qosh", add_owner_cmd),
                      ("admin_qosh", add_admin_cmd), ("tozalash", wipe_cmd),
                      ("kunlik", closings_cmd), ("kunlik_ochir", closing_delete_cmd),
+                     ("qarzlar", debts_cmd), ("qarz_ochir", debt_delete_cmd),
                      ("foydalanuvchilar", users_cmd), ("ishchilar", staff_cmd),
                      ("ishchi_qosh", add_employee_cmd), ("oylik", salary_cmd), ("boshat", fire_cmd),
                      ("yandex", yandex_cmd), ("savdo", owner_sale_cmd), ("oxirgi", last_cmd),

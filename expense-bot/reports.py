@@ -432,6 +432,20 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
         ws7.append([c["day"], pts.get(c["point_id"], "?"), c["total"], c["card"], c["spent"], expected,
                     c["cash_left"], c["cash_left"] - expected, names.get(c["created_by"], ("?",))[0]])
 
+    # Qarzlar (faqat xo'jayin hisobotida)
+    if not point_id:
+        ws8 = wb.create_sheet("Qarzlar")
+        ws8.append(["Kimga", "Jami olingan", "Jami to'langan", "Qoldiq qarz", "Oxirgi sana"])
+        for r in db.debt_balances(only_open=False):
+            ws8.append([r["name"], r["taken"], r["paid"], r["balance"], r["last_day"]])
+        ws8.append(["JAMI QARZ", None, None, sum(r["balance"] for r in db.debt_balances() if r["balance"] > 0), None])
+        ws8.append([])
+        ws8.append(["Shu oydagi harakatlar"])
+        ws8.append(["Sana", "Kimga", "Qarz olindi", "To'landi", "Izoh"])
+        for m in db.debt_moves_between(start, end):
+            ws8.append([m["day"], m["name"], m["amount"] if m["amount"] > 0 else None,
+                        -m["amount"] if m["amount"] < 0 else None, m["note"]])
+
     # 7. Ishchilar
     ws6 = wb.create_sheet("Ishchilar")
     ws6.append(["Ishchi", "Tochka", "Oylik", "Oldi", "Qoldi", "Holati"])
