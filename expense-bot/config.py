@@ -53,6 +53,8 @@ ADMIN_REMINDER_TIME = _time("ADMIN_REMINDER_TIME", "10:00")  # adminga: kechagi 
 DIGEST_TIME = _time("DIGEST_TIME", "09:00")                  # xo'jayinlarga kechagi xulosa
 BACKUP_WEEKDAY = int(os.getenv("BACKUP_WEEKDAY", "6"))       # 0=dushanba … 6=yakshanba
 BACKUP_TIME = _time("BACKUP_TIME", "10:00")
+# Ishchilar hisobi shu kundan boshlanadi (undan oldingisi yopilgan). Ish haqi = ishlagan kun × kunlik stavka.
+SALARY_START = date.fromisoformat(os.getenv("SALARY_START", "2026-11-26"))
 NOTIFY_OWNERS_ON_SALES = os.getenv("NOTIFY_OWNERS_ON_SALES", "1") == "1"
 # Kuniga nechta smena (kirim smena bo'yicha yoziladi)
 SHIFTS = max(1, int(os.getenv("SHIFTS", "2")))

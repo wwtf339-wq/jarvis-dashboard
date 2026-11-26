@@ -197,6 +197,16 @@ Vaqtlarni `.env` dagi `DIGEST_TIME`, `SALES_REMINDER_TIME`, `BACKUP_*` orqali o'
 
 ---
 
+## 5.0. Ishchilar: kunlik ish haqi va davomat
+
+Hisob **26.11.2026** dan boshlangan (`.env` dagi `SALARY_START`). Undan oldingi kunlar va to'lovlar yopilgan hisoblanadi.
+- Har ishchiga **kunlik stavka**: `/oylik Umid 200000` (yoki `/oylik` → ro'yxatdan tanlash). Yangi ishchi: `/ishchi_qosh Umid 200000`.
+- **Davomat** (kim ishladi):
+  - admin ertalabki «📝 Kunlik hisobot» ichida, jami savdodan keyin, ro'yxatdan belgilaydi;
+  - xo'jayin: «👥 Xodimlar» → «✅ Davomat (kecha/bugun)» yoki `/davomat`, `/davomat bugun`. Qayta ochilsa, avvalgi belgilar turadi va o'zgartirish mumkin.
+- **Hisob:** ishlagan kun × stavka = hisoblangan; minus shu ishchiga berilgan pul (avans, «Umid 200 ming oldi») = **qoldiq**. «👥 Xodimlar» da har bir ishchi va «jami berilishi kerak» summasi ko'rinadi; oy hisoboti va Excel'ning **Ishchilar** varag'ida ham.
+- Ismsiz «ishchilar 400000» to'lovi kimgadir yozilmaydi — ishchilarga pul berilganda ism bilan yozing: «Umid 200000, Ibrat 150000».
+
 ## 5.1. Qarzlar (faqat xo'jayin)
 
 Bosh menyuda **📒 Qarzlar** tugmasi: go'shtchi, bozor, ta'minotchilarga qarzlarimiz.

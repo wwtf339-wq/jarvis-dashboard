@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS debt_moves (         -- + qarz olindi, − qarz to'la
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS attendance (         -- davomat: kim qaysi kuni ishladi
+    day TEXT NOT NULL,
+    employee_id INTEGER NOT NULL REFERENCES employees(id),
+    point_id INTEGER,
+    marked_by INTEGER,
+    PRIMARY KEY (day, employee_id)
+);
+
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,                        -- hisobga tushgan kun
@@ -135,6 +143,9 @@ def init():
         c.executescript(SCHEMA)
         _migrate_sales_shift(c)
         _migrate_users_admin(c)
+        cols = [r["name"] for r in c.execute("PRAGMA table_info(employees)")]
+        if "daily_rate" not in cols:  # oylik o'rniga kunlik stavka
+            c.execute("ALTER TABLE employees ADD COLUMN daily_rate INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate_users_admin(c):
@@ -283,11 +294,12 @@ def use_invite(code: str, tg_id: int):
 
 # ---------- xodimlar ----------
 
-def add_employee(name: str, point_id, salary: int, hired_on: date) -> int:
+def add_employee(name: str, point_id, rate: int, hired_on: date) -> int:
+    """rate — kunlik stavka (so'm)."""
     with conn() as c:
         return c.execute(
-            "INSERT INTO employees(name, point_id, salary, hired_on) VALUES (?,?,?,?)",
-            (name.strip(), point_id, salary, hired_on.isoformat()),
+            "INSERT INTO employees(name, point_id, daily_rate, hired_on) VALUES (?,?,?,?)",
+            (name.strip(), point_id, rate, hired_on.isoformat()),
         ).lastrowid
 
 
@@ -309,9 +321,44 @@ def get_employee(emp_id: int):
         return c.execute("SELECT * FROM employees WHERE id=?", (emp_id,)).fetchone()
 
 
-def set_salary(emp_id: int, salary: int) -> bool:
+def set_rate(emp_id: int, rate: int) -> bool:
+    """Kunlik stavkani o'rnatadi."""
     with conn() as c:
-        return c.execute("UPDATE employees SET salary=? WHERE id=?", (salary, emp_id)).rowcount > 0
+        return c.execute("UPDATE employees SET daily_rate=? WHERE id=?", (rate, emp_id)).rowcount > 0
+
+
+# ---------- davomat ----------
+
+def staff_for_point(point_id) -> list[sqlite3.Row]:
+    """Tochka ishchilari + hech qaysi tochkaga biriktirilmaganlar."""
+    with conn() as c:
+        return c.execute("SELECT * FROM employees WHERE active=1 AND (point_id=? OR point_id IS NULL)"
+                         " ORDER BY name", (point_id,)).fetchall()
+
+
+def attendance_of(day: date, point_id) -> set[int]:
+    with conn() as c:
+        return {r["employee_id"] for r in c.execute(
+            "SELECT employee_id FROM attendance WHERE day=? AND point_id=?", (day.isoformat(), point_id))}
+
+
+def set_attendance(day: date, point_id, employee_ids, by: int):
+    """O'sha kun va tochka davomatini to'liq almashtiradi."""
+    iso = day.isoformat()
+    with conn() as c:
+        c.execute("DELETE FROM attendance WHERE day=? AND point_id=?", (iso, point_id))
+        for eid in employee_ids:
+            c.execute("INSERT INTO attendance(day, employee_id, point_id, marked_by) VALUES (?,?,?,?)"
+                      " ON CONFLICT(day, employee_id) DO UPDATE SET point_id=excluded.point_id,"
+                      " marked_by=excluded.marked_by", (iso, eid, point_id, by))
+
+
+def attendance_days(start: date, end: date) -> dict[int, int]:
+    """{employee_id: ishlagan kunlar soni} shu oraliqda."""
+    with conn() as c:
+        return {r["employee_id"]: r["n"] for r in c.execute(
+            "SELECT employee_id, COUNT(*) AS n FROM attendance WHERE day BETWEEN ? AND ? GROUP BY employee_id",
+            (start.isoformat(), end.isoformat()))}
 
 
 def fire_employee(emp_id: int, day: date) -> bool:
@@ -373,7 +420,8 @@ def get_expense(expense_id: int):
 def wipe_records() -> dict:
     """Barcha xarajat, kirim, Yandex va kunlik hisobotlarni o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
     with conn() as c:
-        return {t: c.execute(f"DELETE FROM {t}").rowcount for t in ("expenses", "sales", "yandex", "closings")}
+        return {t: c.execute(f"DELETE FROM {t}").rowcount
+                for t in ("expenses", "sales", "yandex", "closings", "attendance")}
 
 
 # ---------- kunlik hisobot (admin) ----------
