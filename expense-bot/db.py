@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS points (
 CREATE TABLE IF NOT EXISTS users (
     tg_id INTEGER PRIMARY KEY,
     name TEXT,
-    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier')),
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier', 'worker')),
     point_id INTEGER REFERENCES points(id),
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS attendance (         -- davomat: kim qaysi kuni ishla
     employee_id INTEGER NOT NULL REFERENCES employees(id),
     point_id INTEGER,
     marked_by INTEGER,
+    worked INTEGER NOT NULL DEFAULT 1,      -- 1 = ishladi, 0 = dam oldi (ishchi o'zi belgilagan)
     PRIMARY KEY (day, employee_id)
 );
 
@@ -146,12 +147,25 @@ def init():
         cols = [r["name"] for r in c.execute("PRAGMA table_info(employees)")]
         if "daily_rate" not in cols:  # oylik o'rniga kunlik stavka
             c.execute("ALTER TABLE employees ADD COLUMN daily_rate INTEGER NOT NULL DEFAULT 0")
+        _add_col(c, "users", "employee_id", "INTEGER")      # ishchi akkaunti qaysi xodimga tegishli
+        _add_col(c, "invites", "employee_id", "INTEGER")
+        _add_col(c, "attendance", "worked", "INTEGER NOT NULL DEFAULT 1")
+        if c.execute("PRAGMA user_version").fetchone()[0] < 2:
+            # bir martalik: eski oylik/stavkalar o'chiriladi (xo'jayin kunlik summani qayta yozadi),
+            # ishchilar tochkalarga bog'lanmaydi
+            c.execute("UPDATE employees SET salary=0, daily_rate=0, point_id=NULL")
+            c.execute("PRAGMA user_version = 2")
+
+
+def _add_col(c, table: str, col: str, decl: str):
+    if col not in [r["name"] for r in c.execute(f"PRAGMA table_info({table})")]:
+        c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
 
 def _migrate_users_admin(c):
-    """Eski bazada users.role faqat owner/cashier bo'lishi mumkin edi — 'admin' ni qo'shamiz."""
+    """Eski bazada users.role cheklangan edi — 'admin' va 'worker' rollarini qo'shamiz."""
     sql = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()["sql"]
-    if "'admin'" in sql:
+    if "'worker'" in sql:
         return
     c.commit()
     c.execute("PRAGMA foreign_keys=OFF")
@@ -159,7 +173,7 @@ def _migrate_users_admin(c):
         CREATE TABLE users_new (
             tg_id INTEGER PRIMARY KEY,
             name TEXT,
-            role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier')),
+            role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'cashier', 'worker')),
             point_id INTEGER REFERENCES points(id),
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -229,14 +243,20 @@ def get_user(tg_id: int):
         return c.execute("SELECT * FROM users WHERE tg_id=?", (tg_id,)).fetchone()
 
 
-def upsert_user(tg_id: int, name: str, role: str, point_id=None):
+def upsert_user(tg_id: int, name: str, role: str, point_id=None, employee_id=None):
     with conn() as c:
         c.execute(
-            "INSERT INTO users(tg_id, name, role, point_id, active) VALUES (?,?,?,?,1)"
+            "INSERT INTO users(tg_id, name, role, point_id, active, employee_id) VALUES (?,?,?,?,1,?)"
             " ON CONFLICT(tg_id) DO UPDATE SET name=excluded.name, role=excluded.role,"
-            " point_id=excluded.point_id, active=1",
-            (tg_id, name, role, point_id),
+            " point_id=excluded.point_id, active=1, employee_id=excluded.employee_id",
+            (tg_id, name, role, point_id, employee_id),
         )
+
+
+def worker_user_of(employee_id: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM users WHERE role='worker' AND active=1 AND employee_id=?",
+                         (employee_id,)).fetchone()
 
 
 def users() -> list[sqlite3.Row]:
@@ -270,12 +290,12 @@ def cashiers_of(point_id: int) -> list[int]:
 
 # ---------- taklif havolalari ----------
 
-def create_invite(role: str, point_id, created_by: int) -> str:
+def create_invite(role: str, point_id, created_by: int, employee_id=None) -> str:
     code = secrets.token_urlsafe(9)
     expires = (datetime.now(timezone.utc) + timedelta(hours=INVITE_TTL_HOURS)).isoformat()
     with conn() as c:
-        c.execute("INSERT INTO invites(code, role, point_id, created_by, expires_at) VALUES (?,?,?,?,?)",
-                  (code, role, point_id, created_by, expires))
+        c.execute("INSERT INTO invites(code, role, point_id, created_by, expires_at, employee_id)"
+                  " VALUES (?,?,?,?,?,?)", (code, role, point_id, created_by, expires, employee_id))
     return code
 
 
@@ -330,34 +350,65 @@ def set_rate(emp_id: int, rate: int) -> bool:
 # ---------- davomat ----------
 
 def staff_for_point(point_id) -> list[sqlite3.Row]:
-    """Tochka ishchilari + hech qaysi tochkaga biriktirilmaganlar."""
+    """point_id berilsa — faqat o'sha tochka ishchilari; None — hamma faol ishchilar."""
     with conn() as c:
-        return c.execute("SELECT * FROM employees WHERE active=1 AND (point_id=? OR point_id IS NULL)"
-                         " ORDER BY name", (point_id,)).fetchall()
+        if point_id:
+            return c.execute("SELECT * FROM employees WHERE active=1 AND point_id=? ORDER BY name",
+                             (point_id,)).fetchall()
+        return c.execute("SELECT * FROM employees WHERE active=1 ORDER BY name").fetchall()
 
 
-def attendance_of(day: date, point_id) -> set[int]:
+def attendance_of(day: date, point_id=None) -> set[int]:
+    """Shu kuni ishlaganlar (point_id None — hammasi)."""
     with conn() as c:
-        return {r["employee_id"] for r in c.execute(
-            "SELECT employee_id FROM attendance WHERE day=? AND point_id=?", (day.isoformat(), point_id))}
+        if point_id:
+            q, args = "SELECT employee_id FROM attendance WHERE day=? AND point_id=? AND worked=1", (day.isoformat(), point_id)
+        else:
+            q, args = "SELECT employee_id FROM attendance WHERE day=? AND worked=1", (day.isoformat(),)
+        return {r["employee_id"] for r in c.execute(q, args)}
+
+
+def day_status(day: date) -> dict[int, int]:
+    """{employee_id: 1 ishladi / 0 dam oldi} — belgilanmaganlar yo'q."""
+    with conn() as c:
+        return {r["employee_id"]: r["worked"] for r in c.execute(
+            "SELECT employee_id, worked FROM attendance WHERE day=?", (day.isoformat(),))}
+
+
+def mark_day(day: date, employee_id: int, worked: bool, by: int):
+    """Ishchi o'zi: "ishga chiqdim" yoki "dam oldim"."""
+    with conn() as c:
+        c.execute("INSERT INTO attendance(day, employee_id, point_id, marked_by, worked) VALUES (?,?,NULL,?,?)"
+                  " ON CONFLICT(day, employee_id) DO UPDATE SET worked=excluded.worked, marked_by=excluded.marked_by",
+                  (day.isoformat(), employee_id, by, int(worked)))
+
+
+def worked_days(employee_id: int, start: date, end: date) -> list[str]:
+    with conn() as c:
+        return [r["day"] for r in c.execute(
+            "SELECT day FROM attendance WHERE employee_id=? AND worked=1 AND day BETWEEN ? AND ? ORDER BY day",
+            (employee_id, start.isoformat(), end.isoformat()))]
 
 
 def set_attendance(day: date, point_id, employee_ids, by: int):
-    """O'sha kun va tochka davomatini to'liq almashtiradi."""
+    """Ro'yxatdagi (tochka yoki hamma) ishchilar uchun shu kun davomatini almashtiradi:
+    belgilanganlar — ishladi, belgilanmaganlar — dam oldi."""
     iso = day.isoformat()
+    chosen = set(employee_ids)
+    staff = staff_for_point(point_id)
     with conn() as c:
-        c.execute("DELETE FROM attendance WHERE day=? AND point_id=?", (iso, point_id))
-        for eid in employee_ids:
-            c.execute("INSERT INTO attendance(day, employee_id, point_id, marked_by) VALUES (?,?,?,?)"
-                      " ON CONFLICT(day, employee_id) DO UPDATE SET point_id=excluded.point_id,"
-                      " marked_by=excluded.marked_by", (iso, eid, point_id, by))
+        for e in staff:
+            c.execute("INSERT INTO attendance(day, employee_id, point_id, marked_by, worked) VALUES (?,?,?,?,?)"
+                      " ON CONFLICT(day, employee_id) DO UPDATE SET worked=excluded.worked,"
+                      " marked_by=excluded.marked_by", (iso, e["id"], point_id, by, int(e["id"] in chosen)))
 
 
 def attendance_days(start: date, end: date) -> dict[int, int]:
     """{employee_id: ishlagan kunlar soni} shu oraliqda."""
     with conn() as c:
         return {r["employee_id"]: r["n"] for r in c.execute(
-            "SELECT employee_id, COUNT(*) AS n FROM attendance WHERE day BETWEEN ? AND ? GROUP BY employee_id",
+            "SELECT employee_id, COUNT(*) AS n FROM attendance WHERE worked=1 AND day BETWEEN ? AND ?"
+            " GROUP BY employee_id",
             (start.isoformat(), end.isoformat()))}
 
 

@@ -44,6 +44,8 @@ OWNER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC], [O_TODAY, O_WEEK, O_MONTH], [O_X
                                resize_keyboard=True)
 CASHIER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC]], resize_keyboard=True)
 B_DAY = "📝 Kunlik hisobot"
+W_IN, W_OFF, W_ME = "✅ Ishga chiqdim", "🏖 Dam oldim", "📊 Mening hisobim"
+WORKER_KB = ReplyKeyboardMarkup([[W_IN, W_OFF], [W_ME]], resize_keyboard=True)
 ADMIN_KB = ReplyKeyboardMarkup([[B_DAY]], resize_keyboard=True)
 
 EXP_PROMPT = ("💸 Xarajatni <b>ovoz</b> yoki <b>matn</b> bilan yuboring. Bitta xabarda bir nechtasini aytish mumkin:\n"
@@ -72,6 +74,7 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /ishchi_qosh Ism — ishga olish (/ishchi_qosh Ibrat, Jahongir)
 /oylik Ism Summa — kunlik stavka (/oylik Umid 200000)
 /davomat — kim ishlaganini belgilash (/davomat bugun)
+/ishchi_ulash — ishchini botga ulash (o'zi «Ishga chiqdim / Dam oldim» bosadi)
 /boshat № — ishdan bo'shatish
 
 💰 <b>Pul</b>
@@ -103,6 +106,13 @@ Har kuni ertalab <b>📝 Kunlik hisobot</b> ni bosib, kechagi kunni yozasiz:
 
 Bot hisoblab, kassadagi naqd to'g'ri yoki farq borligini ko'rsatadi.
 Saqlangan hisobotni o'zgartirib yoki o'chirib bo'lmaydi — xato bo'lsa, xo'jayinga ayting."""
+
+WORKER_HELP = ("Salom, <b>{name}</b>!\n\n"
+               "Har kuni bitta tugmani bosing:\n"
+               "✅ <b>Ishga chiqdim</b> — bugun ishlayapman\n"
+               "🏖 <b>Dam oldim</b> — bugun ishlamayman\n\n"
+               "📊 <b>Mening hisobim</b> — bu oy necha kun ishladingiz, qancha hisoblandi, qancha oldingiz.\n"
+               "Xato bossangiz, ikkinchisini bosing — almashadi.")
 
 CASHIER_HELP = ("Salom! Siz <b>{point}</b> xodimisiz.\n\n"
                 "💸 <b>Xarajat</b> — pul chiqsa (bozorlik, avans, benzin…) ovoz yoki matn bilan yozing.\n"
@@ -214,7 +224,7 @@ def in_scope(u, point_id) -> bool:
 
 
 def role_kb(u):
-    return {"owner": OWNER_KB, "admin": ADMIN_KB}.get(u["role"], CASHIER_KB)
+    return {"owner": OWNER_KB, "admin": ADMIN_KB, "worker": WORKER_KB}.get(u["role"], CASHIER_KB)
 
 
 def role_help(u) -> str:
@@ -222,6 +232,9 @@ def role_help(u) -> str:
         return OWNER_HELP
     if u["role"] == "admin":
         return ADMIN_HELP.format(point=escape(db.point_name(u["point_id"])))
+    if u["role"] == "worker":
+        e = db.get_employee(u["employee_id"]) if u["employee_id"] else None
+        return WORKER_HELP.format(name=escape(e["name"] if e else (u["name"] or "")))
     return CASHIER_HELP.format(point=escape(db.point_name(u["point_id"])))
 
 
@@ -238,9 +251,11 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await update.message.reply_text("Havola eskirgan yoki ishlatib bo'lingan. Xo'jayindan yangisini so'rang.")
         if inv["role"] == "owner" and len(db.owner_ids()) >= MAX_OWNERS and tg_id not in db.owner_ids():
             return await update.message.reply_text(f"Xo'jayinlar soni chegaraga ({MAX_OWNERS}) yetgan.")
-        db.upsert_user(tg_id, name, inv["role"], inv["point_id"])
+        db.upsert_user(tg_id, name, inv["role"], inv["point_id"], inv["employee_id"])
         db.audit(tg_id, "joined", f"{inv['role']} point={inv['point_id']} by={inv['created_by']}")
-        role_txt = {"owner": "xo'jayin", "admin": f"«{db.point_name(inv['point_id'])}» admini"}.get(
+        emp = db.get_employee(inv["employee_id"]) if inv["employee_id"] else None
+        role_txt = {"owner": "xo'jayin", "admin": f"«{db.point_name(inv['point_id'])}» admini",
+                    "worker": f"ishchi ({emp['name'] if emp else '?'})"}.get(
             inv["role"], f"«{db.point_name(inv['point_id'])}» kassiri")
         for oid in db.owner_ids():
             if oid != tg_id:
@@ -318,10 +333,12 @@ async def add_owner_cmd(update, ctx, u):
     await send_invite(update.message, ctx, u, "owner", None)
 
 
-async def send_invite(message, ctx, u, role: str, point_id):
-    code = db.create_invite(role, point_id, u["tg_id"])
+async def send_invite(message, ctx, u, role: str, point_id, employee_id=None):
+    code = db.create_invite(role, point_id, u["tg_id"], employee_id)
     link = f"https://t.me/{ctx.bot.username}?start=inv_{code}"
-    who = {"owner": "xo'jayin", "admin": f"«{escape(db.point_name(point_id))}» admini"}.get(
+    emp = db.get_employee(employee_id) if employee_id else None
+    who = {"owner": "xo'jayin", "admin": f"«{escape(db.point_name(point_id))}» admini",
+           "worker": f"ishchi {escape(emp['name']) if emp else ''}"}.get(
         role, f"«{escape(db.point_name(point_id))}» kassiri")
     await message.reply_text(
         f"🔗 Shu havolani {who}ga yuboring (48 soat, bir marta ishlaydi):\n\n{link}",
@@ -335,7 +352,9 @@ async def users_cmd(update, ctx, u):
         return await update.message.reply_text("Hech kim yo'q.")
     lines, kb = [], []
     for r in rows:
-        role = {"owner": "👑 xo'jayin", "admin": f"🛡 admin — {db.point_name(r['point_id'])}"}.get(
+        emp = db.get_employee(r["employee_id"]) if r["employee_id"] else None
+        role = {"owner": "👑 xo'jayin", "admin": f"🛡 admin — {db.point_name(r['point_id'])}",
+                "worker": f"👷 ishchi — {emp['name'] if emp else '?'}"}.get(
             r["role"], f"🧾 kassir — {db.point_name(r['point_id'])}")
         status = "" if r["active"] else " — ❌ o'chirilgan"
         lines.append(f"{escape(r['name'] or str(r['tg_id']))} — {escape(role)}{status}")
@@ -348,18 +367,29 @@ async def users_cmd(update, ctx, u):
 
 # ---------- xodimlar ----------
 
+def month_period(today: date) -> tuple[date, date]:
+    """Joriy oy, lekin SALARY_START dan oldin emas."""
+    start, _ = reports.month_range(today.year, today.month)
+    return max(start, SALARY_START), today
+
+
 @manager_only
 async def staff_cmd(update, ctx, u):
     emps = db.employees(point_id=scope(u))
     if not emps:
         return await update.message.reply_text("Xodim yo'q.\n" + ADD_EMP_HELP)
     today = business_today()
-    wages = {r["id"]: r for r in reports.employee_payments(SALARY_START, today, scope(u))}
-    lines = [f"👥 <b>Xodimlar</b> — {SALARY_START:%d.%m.%Y} dan bugungacha\n"]
+    start, end = month_period(today)
+    wages = {r["id"]: r for r in reports.employee_payments(start, end, scope(u))}
+    status = db.day_status(today)
+    icon = {1: "✅ ishda", 0: "🏖 dam"}
+    lines = [f"👥 <b>Xodimlar — {reports.MONTHS[today.month]}</b> ({start:%d.%m} – {end:%d.%m})\n"]
     total_left = 0
     for e in emps:
         w = wages.get(e["id"]) or dict(days=0, rate=e["daily_rate"], earned=0, paid=0, left=0)
-        line = f"№{e['id']} <b>{escape(e['name'])}</b> — {escape(db.point_name(e['point_id']))}\n"
+        phone = "📱" if db.worker_user_of(e["id"]) else ""
+        line = (f"№{e['id']} <b>{escape(e['name'])}</b> {phone} — bugun: "
+                f"{icon.get(status.get(e['id']), '⏳ belgilanmagan')}\n")
         if w["rate"]:
             rest = (f"qoldi <b>{som(w['left'])}</b>" if w["left"] >= 0
                     else f"⚠️ ortiqcha olgan <b>{som(-w['left'])}</b>")
@@ -367,12 +397,13 @@ async def staff_cmd(update, ctx, u):
                      f"   oldi {som(w['paid'])} · {rest}")
             total_left += max(w["left"], 0)
         else:
-            line += f"   ⚠️ kunlik stavka yo'q · {w['days']} kun ishlagan · oldi {som(w['paid'])}"
+            line += f"   ⚠️ kunlik summa yo'q · {w['days']} kun ishlagan · oldi {som(w['paid'])}"
         lines.append(line)
-    lines.append(f"\n<b>Ishchilarga jami berilishi kerak: {som(total_left)}</b>")
-    lines.append("\nStavka: /oylik Ism Summa · Bo'shatish: /boshat №")
+    lines.append(f"\n<b>Bu oy ishchilarga jami berilishi kerak: {som(total_left)}</b>")
+    lines.append("\nKunlik summa: /oylik Ism Summa · Bo'shatish: /boshat №\n📱 — botga ulangan")
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Davomat (kecha)", callback_data="dv:1"),
-                                InlineKeyboardButton("✅ Davomat (bugun)", callback_data="dv:0")]])
+                                InlineKeyboardButton("✅ Davomat (bugun)", callback_data="dv:0")],
+                               [InlineKeyboardButton("🔗 Ishchini botga ulash", callback_data="wl")]])
     await update.message.reply_text("\n".join(lines), parse_mode=HTML, reply_markup=kb)
 
 
@@ -409,16 +440,7 @@ async def add_employee_cmd(update, ctx, u):
                 + ". Farqlash uchun familiyasini qo'shing (masalan Ibrat Karimov).\n")
     if not people:
         return await update.message.reply_text(note + ADD_EMP_HELP)
-    item = dict(type="emp", people=people, note=note, by=u["tg_id"])
-    if u["role"] == "admin":
-        item["point"] = u["point_id"]
-        return await finish_employee(update.message, item)
-    pts = db.points()
-    if len(pts) > 1:
-        key = stash(ctx, item)
-        names = ", ".join(p[0] for p in people)
-        return await update.message.reply_text(f"{names} qaysi tochkada ishlaydi?", reply_markup=points_kb(f"pt:{key}"))
-    item["point"] = pts[0]["id"] if pts else None
+    item = dict(type="emp", people=people, note=note, by=u["tg_id"], point=None)  # ishchilar tochkaga bog'lanmaydi
     await finish_employee(update.message, item)
 
 
@@ -429,8 +451,9 @@ async def finish_employee(message, item):
         db.audit(item["by"], "employee_add", f"{eid} {name} {rate}")
         pay = f"kuniga {som(rate)}" if rate else "kunlik stavka belgilanmagan"
         lines.append(f"✅ №{eid} {name} — {pay}")
-    head = f"Ishga olindi ({db.point_name(item.get('point'))}):\n"
-    tail = "\n\nKunlik stavka qo'yish: /oylik Ism summa  (masalan /oylik Jahongir 200000)"
+    head = "Ishga olindi:\n"
+    tail = ("\n\nKunlik stavka qo'yish: /oylik Ism summa  (masalan /oylik Jahongir 200000)\n"
+            "Ishchini botga ulash (o'zi «Ishga chiqdim» bosishi uchun): /ishchi_ulash")
     await message.reply_text(item.get("note", "") + head + "\n".join(lines) + tail)
 
 
@@ -872,7 +895,8 @@ def att_kb(st: dict) -> InlineKeyboardMarkup:
 
 def att_text(st: dict) -> str:
     day = date.fromisoformat(st["day"])
-    return (f"👥 <b>{day:%d.%m.%Y} kuni kimlar ishladi?</b> — 🏪 {escape(db.point_name(st['point']))}\n"
+    where = f" — 🏪 {escape(db.point_name(st['point']))}" if st["point"] else ""
+    return (f"👥 <b>{day:%d.%m.%Y} kuni kimlar ishladi?</b>{where}\n"
             "Ishlaganlarni bosib belgilang, keyin «Tayyor».")
 
 
@@ -890,19 +914,12 @@ async def attendance_cmd(update, ctx, u):
 
 async def attendance_start(message, ctx, u, back: int):
     day = business_today() - timedelta(days=back)
-    pts = db.points()
-    if not pts:
-        return await message.reply_text("Avval tochka qo'shing: /nuqta_qosh Nomi")
-    if len(pts) > 1:
-        kb = [[InlineKeyboardButton(p["name"], callback_data=f"dp:{p['id']}:{day.isoformat()}")] for p in pts]
-        return await message.reply_text(f"👥 Davomat {day:%d.%m.%Y} — qaysi tochka?",
-                                         reply_markup=InlineKeyboardMarkup(kb))
-    await attendance_open(message, ctx, pts[0]["id"], day)
+    await attendance_open(message, ctx, None, day)   # ishchilar tochkaga bog'lanmagan — hammasi bitta ro'yxat
 
 
 async def attendance_open(message, ctx, point_id: int, day: date):
     if not db.staff_for_point(point_id):
-        return await message.reply_text("Bu tochkada ishchi yo'q. Qo'shish: /ishchi_qosh Ism")
+        return await message.reply_text("Ishchi yo'q. Qo'shish: /ishchi_qosh Ism")
     st = dict(day=day.isoformat(), point=point_id, ids=sorted(db.attendance_of(day, point_id)), mode="owner")
     ctx.user_data["att"] = st
     await message.reply_text(att_text(st), parse_mode=HTML, reply_markup=att_kb(st))
@@ -928,6 +945,70 @@ async def attendance_button(q, ctx, u, arg: str):
         return await q.message.reply_text(CLOSE_EXP_PROMPT, parse_mode=HTML, reply_markup=close_exp_kb(False))
     db.set_attendance(date.fromisoformat(st["day"]), st["point"], st["ids"], u["tg_id"])
     db.audit(u["tg_id"], "attendance", f"{st['point']} {st['day']} {st['ids']}")
+
+
+# ---------- ishchi: kunlik belgi ----------
+
+def worker_summary(emp, today: date) -> str:
+    start, end = month_period(today)
+    w = next((r for r in reports.employee_payments(start, end) if r["id"] == emp["id"]), None)
+    days = db.worked_days(emp["id"], start, end)
+    dates = ", ".join(d[8:] for d in days) or "—"
+    lines = [f"📊 <b>{escape(emp['name'])} — {reports.MONTHS[today.month]}</b>",
+             f"Ishlagan kunlar: <b>{len(days)}</b> ({dates})"]
+    if w and w["rate"]:
+        lines += [f"Kunlik: {som(w['rate'])}",
+                  f"Hisoblandi: {len(days)} × {som(w['rate'])} = <b>{som(w['earned'])}</b>",
+                  f"Oldingiz: {som(w['paid'])}",
+                  f"Qoldi: <b>{som(w['left'])}</b>" if w["left"] >= 0 else f"Ortiqcha olgansiz: {som(-w['left'])}"]
+    else:
+        lines.append("Kunlik summangiz hali belgilanmagan — xo'jayinga ayting.")
+    return "\n".join(lines)
+
+
+async def worker_text(update, ctx, u, text: str):
+    emp = db.get_employee(u["employee_id"]) if u["employee_id"] else None
+    if not emp or not emp["active"]:
+        return await update.message.reply_text("Siz ishchilar ro'yxatida yo'qsiz. Xo'jayinga murojaat qiling.")
+    today = business_today()
+    if text in (W_IN, W_OFF):
+        worked = text == W_IN
+        db.mark_day(today, emp["id"], worked, u["tg_id"])
+        n = len(db.worked_days(emp["id"], *month_period(today)))
+        msg = "✅ Belgilandi: bugun ishga chiqdingiz." if worked else "🏖 Belgilandi: bugun dam olasiz."
+        return await update.message.reply_text(f"{msg} ({today:%d.%m})\nBu oy ishlagan kunlar: {n}",
+                                               reply_markup=WORKER_KB)
+    if text == W_ME:
+        return await update.message.reply_text(worker_summary(emp, today), parse_mode=HTML, reply_markup=WORKER_KB)
+    await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=WORKER_KB)
+
+
+@owner_only
+async def worker_link_cmd(update, ctx, u):
+    await worker_link_list(update.message)
+
+
+async def worker_link_list(message):
+    emps = db.employees()
+    if not emps:
+        return await message.reply_text("Avval ishchi qo'shing: /ishchi_qosh Ism")
+    kb = [[InlineKeyboardButton(e["name"] + (" (📱 ulangan)" if db.worker_user_of(e["id"]) else ""),
+                                callback_data=f"wi:{e['id']}")] for e in emps]
+    await message.reply_text("🔗 Qaysi ishchini botga ulaymiz? Bot havola beradi, uni o'sha ishchiga yuborasiz.",
+                             reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def job_worker_reminder(ctx: ContextTypes.DEFAULT_TYPE):
+    today = business_today()
+    status = db.day_status(today)
+    for e in db.employees():
+        w = db.worker_user_of(e["id"])
+        if not w or e["id"] in status:
+            continue
+        try:
+            await ctx.bot.send_message(w["tg_id"], "Bugun ishga chiqdingizmi? Tugmani bosing 👇", reply_markup=WORKER_KB)
+        except Exception:
+            log.warning("worker %s reminder failed", w["tg_id"])
 
 
 # ---------- qarzlar (xo'jayin) ----------
@@ -1241,6 +1322,8 @@ async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     u = current_user(update)
     if not u:
         return await deny(update)
+    if u["role"] == "worker":
+        return await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=WORKER_KB)
     if u["role"] == "admin":
         st = ctx.user_data.get("close")
         if st:
@@ -1255,6 +1338,8 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     text = update.message.text.strip()
+    if u["role"] == "worker":
+        return await worker_text(update, ctx, u, text)
     if u["role"] == "admin":
         if text == B_DAY:
             return await close_start(update.message, ctx, u)
@@ -1439,6 +1524,15 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"{n['closings']} ta kunlik hisobot.\n"
             "Tochkalar, ishchilar va foydalanuvchilar joyida qoldi.")
 
+    if action == "wl":  # ishchini botga ulash — ro'yxat
+        await q.answer()
+        return await worker_link_list(q.message)
+
+    if action == "wi":  # wi:<employee_id> — ishchi uchun taklif havolasi
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        return await send_invite(q.message, ctx, u, "worker", None, int(parts[1]))
+
     if action == "dv":  # dv:<necha kun oldin> — davomat (Xodimlar ichidan)
         await q.answer()
         return await attendance_start(q.message, ctx, u, int(parts[1]))
@@ -1610,7 +1704,7 @@ def main():
                      ("admin_qosh", add_admin_cmd), ("tozalash", wipe_cmd),
                      ("kunlik", closings_cmd), ("kunlik_ochir", closing_delete_cmd),
                      ("qarzlar", debts_cmd), ("qarz_ochir", debt_delete_cmd),
-                     ("davomat", attendance_cmd),
+                     ("davomat", attendance_cmd), ("ishchi_ulash", worker_link_cmd),
                      ("foydalanuvchilar", users_cmd), ("ishchilar", staff_cmd),
                      ("ishchi_qosh", add_employee_cmd), ("oylik", salary_cmd), ("boshat", fire_cmd),
                      ("yandex", yandex_cmd), ("savdo", owner_sale_cmd), ("oxirgi", last_cmd),
@@ -1624,6 +1718,7 @@ def main():
     jq = app.job_queue
     jq.run_daily(job_sales_reminder, at(SALES_REMINDER_TIME), name="sales_reminder")
     jq.run_daily(job_admin_reminder, at(ADMIN_REMINDER_TIME), name="admin_reminder")
+    jq.run_daily(job_worker_reminder, at(ADMIN_REMINDER_TIME), name="worker_reminder")
     jq.run_daily(job_digest, at(DIGEST_TIME), name="digest")
     # PTB da 0 = yakshanba, bizning sozlamada 0 = dushanba
     jq.run_daily(job_backup, at(BACKUP_TIME), days=((BACKUP_WEEKDAY + 1) % 7,), name="backup")
