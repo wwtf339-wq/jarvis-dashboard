@@ -49,7 +49,8 @@ MAX_OWNERS = int(os.getenv("MAX_OWNERS", "3"))
 DAY_START_HOUR = int(os.getenv("DAY_START_HOUR", "5"))
 
 SALES_REMINDER_TIME = _time("SALES_REMINDER_TIME", "23:30")  # kassirga eslatma
-ADMIN_REMINDER_TIME = _time("ADMIN_REMINDER_TIME", "10:00")  # adminga: kechagi hisobot yozilmagan bo'lsa
+ADMIN_REMINDER_TIME = _time("ADMIN_REMINDER_TIME", "10:00")
+CHEF_REMINDER_TIME = _time("CHEF_REMINDER_TIME", "21:00")  # oshpazga: bugungi kg yozilmagan bo'lsa  # adminga: kechagi hisobot yozilmagan bo'lsa
 DIGEST_TIME = _time("DIGEST_TIME", "09:00")                  # xo'jayinlarga kechagi xulosa
 BACKUP_WEEKDAY = int(os.getenv("BACKUP_WEEKDAY", "6"))       # 0=dushanba … 6=yakshanba
 BACKUP_TIME = _time("BACKUP_TIME", "10:00")

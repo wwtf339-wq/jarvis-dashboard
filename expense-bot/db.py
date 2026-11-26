@@ -107,6 +107,14 @@ CREATE TABLE IF NOT EXISTS attendance (         -- davomat: kim qaysi kuni ishla
     PRIMARY KEY (day, employee_id)
 );
 
+CREATE TABLE IF NOT EXISTS production (         -- oshpaz: kuniga necha kg pishirdi
+    day TEXT NOT NULL,
+    employee_id INTEGER NOT NULL REFERENCES employees(id),
+    kg REAL NOT NULL,
+    marked_by INTEGER,
+    PRIMARY KEY (day, employee_id)
+);
+
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,                        -- hisobga tushgan kun
@@ -150,6 +158,12 @@ def init():
         _add_col(c, "users", "employee_id", "INTEGER")      # ishchi akkaunti qaysi xodimga tegishli
         _add_col(c, "invites", "employee_id", "INTEGER")
         _add_col(c, "attendance", "worked", "INTEGER NOT NULL DEFAULT 1")
+        # oshpaz: fiks oylik + oylik limitdan oshgan har kg uchun bonus
+        _add_col(c, "employees", "pay_type", "TEXT NOT NULL DEFAULT 'daily'")   # daily | chef
+        _add_col(c, "employees", "product", "TEXT")                            # "Mol go'shti", "Tovuq go'shti"
+        _add_col(c, "employees", "monthly_fixed", "INTEGER NOT NULL DEFAULT 0")
+        _add_col(c, "employees", "kg_limit", "INTEGER NOT NULL DEFAULT 0")
+        _add_col(c, "employees", "kg_bonus", "INTEGER NOT NULL DEFAULT 0")
         if c.execute("PRAGMA user_version").fetchone()[0] < 2:
             # bir martalik: eski oylik/stavkalar o'chiriladi (xo'jayin kunlik summani qayta yozadi),
             # ishchilar tochkalarga bog'lanmaydi
@@ -472,7 +486,7 @@ def wipe_records() -> dict:
     """Barcha xarajat, kirim, Yandex va kunlik hisobotlarni o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
     with conn() as c:
         return {t: c.execute(f"DELETE FROM {t}").rowcount
-                for t in ("expenses", "sales", "yandex", "closings", "attendance")}
+                for t in ("expenses", "sales", "yandex", "closings", "attendance", "production")}
 
 
 # ---------- kunlik hisobot (admin) ----------
@@ -688,3 +702,39 @@ def delete_debt_move(move_id: int):
         if row:
             c.execute("DELETE FROM debt_moves WHERE id=?", (move_id,))
         return row
+
+
+# ---------- oshpazlar ----------
+
+def set_chef(emp_id: int, product: str, fixed: int, limit: int, bonus: int):
+    with conn() as c:
+        c.execute("UPDATE employees SET pay_type='chef', product=?, monthly_fixed=?, kg_limit=?, kg_bonus=?"
+                  " WHERE id=?", (product, fixed, limit, bonus, emp_id))
+
+
+def set_kg(day: date, employee_id: int, kg: float, by: int):
+    """Shu kungi jami kg (qayta yozilsa almashadi)."""
+    with conn() as c:
+        c.execute("INSERT INTO production(day, employee_id, kg, marked_by) VALUES (?,?,?,?)"
+                  " ON CONFLICT(day, employee_id) DO UPDATE SET kg=excluded.kg, marked_by=excluded.marked_by",
+                  (day.isoformat(), employee_id, kg, by))
+
+
+def kg_of(day: date, employee_id: int):
+    with conn() as c:
+        r = c.execute("SELECT kg FROM production WHERE day=? AND employee_id=?",
+                      (day.isoformat(), employee_id)).fetchone()
+    return r["kg"] if r else None
+
+
+def kg_total(employee_id: int, start: date, end: date) -> float:
+    with conn() as c:
+        return c.execute("SELECT COALESCE(SUM(kg), 0) AS t FROM production WHERE employee_id=? AND day BETWEEN ? AND ?",
+                         (employee_id, start.isoformat(), end.isoformat())).fetchone()["t"]
+
+
+def kg_rows(start: date, end: date) -> list[sqlite3.Row]:
+    with conn() as c:
+        return c.execute("SELECT p.*, e.name, e.product FROM production p JOIN employees e ON e.id = p.employee_id"
+                         " WHERE p.day BETWEEN ? AND ? ORDER BY p.day, e.name",
+                         (start.isoformat(), end.isoformat())).fetchall()

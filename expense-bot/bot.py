@@ -24,7 +24,7 @@ import db
 import quick
 import reports
 from config import (SALARY_START, BACKUP_TIME, BACKUP_WEEKDAY, BOT_TOKEN, CATEGORIES, DB_PATH, DIGEST_TIME,
-                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, ADMIN_REMINDER_TIME, OWNER_IDS, SALES_REMINDER_TIME, at,
+                    MAX_OWNERS, NOTIFY_OWNERS_ON_SALES, SHIFTS, ADMIN_REMINDER_TIME, CHEF_REMINDER_TIME, OWNER_IDS, SALES_REMINDER_TIME, at,
                     business_today)
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
@@ -46,6 +46,8 @@ CASHIER_KB = ReplyKeyboardMarkup([[B_EXP, B_INC]], resize_keyboard=True)
 B_DAY = "📝 Kunlik hisobot"
 W_IN, W_OFF, W_ME = "✅ Ishga chiqdim", "🏖 Dam oldim", "📊 Mening hisobim"
 WORKER_KB = ReplyKeyboardMarkup([[W_IN, W_OFF], [W_ME]], resize_keyboard=True)
+W_KG = "🍖 Bugun necha kg"
+CHEF_KB = ReplyKeyboardMarkup([[W_IN, W_OFF], [W_KG], [W_ME]], resize_keyboard=True)
 ADMIN_KB = ReplyKeyboardMarkup([[B_DAY]], resize_keyboard=True)
 
 EXP_PROMPT = ("💸 Xarajatni <b>ovoz</b> yoki <b>matn</b> bilan yuboring. Bitta xabarda bir nechtasini aytish mumkin:\n"
@@ -75,6 +77,8 @@ OWNER_HELP = """<b>Xo'jayin buyruqlari</b>
 /oylik Ism Summa — kunlik stavka (/oylik Umid 200000)
 /davomat — kim ishlaganini belgilash (/davomat bugun)
 /ishchi_ulash — ishchini botga ulash (o'zi «Ishga chiqdim / Dam oldim» bosadi)
+/oshpaz — oshpaz qo'shish: fiks oylik + limitdan oshgan kg uchun bonus
+/kg Ism 45 — oshpazning bugungi kg (/kg Ali 45 kecha)
 /boshat № — ishdan bo'shatish
 
 💰 <b>Pul</b>
@@ -224,7 +228,14 @@ def in_scope(u, point_id) -> bool:
 
 
 def role_kb(u):
-    return {"owner": OWNER_KB, "admin": ADMIN_KB, "worker": WORKER_KB}.get(u["role"], CASHIER_KB)
+    if u["role"] == "worker":
+        return worker_kb(u)
+    return {"owner": OWNER_KB, "admin": ADMIN_KB}.get(u["role"], CASHIER_KB)
+
+
+def worker_kb(u):
+    e = db.get_employee(u["employee_id"]) if u["employee_id"] else None
+    return CHEF_KB if e and e["pay_type"] == "chef" else WORKER_KB
 
 
 def role_help(u) -> str:
@@ -234,7 +245,11 @@ def role_help(u) -> str:
         return ADMIN_HELP.format(point=escape(db.point_name(u["point_id"])))
     if u["role"] == "worker":
         e = db.get_employee(u["employee_id"]) if u["employee_id"] else None
-        return WORKER_HELP.format(name=escape(e["name"] if e else (u["name"] or "")))
+        text = WORKER_HELP.format(name=escape(e["name"] if e else (u["name"] or "")))
+        if e and e["pay_type"] == "chef":
+            text += ("\n\n🍖 <b>Bugun necha kg</b> — har kuni pishirgan go'shtingizni kg da yozing. "
+                     f"Oylik limit {e['kg_limit']} kg, undan oshgan har kg uchun {som(e['kg_bonus'])} qo'shiladi.")
+        return text
     return CASHIER_HELP.format(point=escape(db.point_name(u["point_id"])))
 
 
@@ -390,9 +405,15 @@ async def staff_cmd(update, ctx, u):
         phone = "📱" if db.worker_user_of(e["id"]) else ""
         line = (f"№{e['id']} <b>{escape(e['name'])}</b> {phone} — bugun: "
                 f"{icon.get(status.get(e['id']), '⏳ belgilanmagan')}\n")
-        if w["rate"]:
-            rest = (f"qoldi <b>{som(w['left'])}</b>" if w["left"] >= 0
-                    else f"⚠️ ortiqcha olgan <b>{som(-w['left'])}</b>")
+        rest = (f"qoldi <b>{som(w['left'])}</b>" if w["left"] >= 0
+                else f"⚠️ ortiqcha olgan <b>{som(-w['left'])}</b>")
+        if w.get("type") == "chef":
+            line += (f"   👨‍🍳 {escape(w['product'])}: {reports.kgf(w['kg'])} / {reports.kgf(w['limit'])} kg"
+                     + (f", limitdan +{reports.kgf(w['over'])} kg" if w["over"] else "") + "\n"
+                     f"   fiks {som(w['fixed'])} + bonus {som(w['bonus'])} = {som(w['earned'])}\n"
+                     f"   oldi {som(w['paid'])} · {rest}")
+            total_left += max(w["left"], 0)
+        elif w["rate"]:
             line += (f"   {w['days']} kun × {som(w['rate'])} = {som(w['earned'])}\n"
                      f"   oldi {som(w['paid'])} · {rest}")
             total_left += max(w["left"], 0)
@@ -850,6 +871,8 @@ async def cancel_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.pop("salary_for", None)
     ctx.user_data.pop("close", None)
     ctx.user_data.pop("debt", None)
+    ctx.user_data.pop("chef", None)
+    ctx.user_data.pop("kg", None)
     await update.message.reply_text("Bekor qilindi.")
 
 
@@ -956,7 +979,15 @@ def worker_summary(emp, today: date) -> str:
     dates = ", ".join(d[8:] for d in days) or "—"
     lines = [f"📊 <b>{escape(emp['name'])} — {reports.MONTHS[today.month]}</b>",
              f"Ishlagan kunlar: <b>{len(days)}</b> ({dates})"]
-    if w and w["rate"]:
+    if w and w.get("type") == "chef":
+        lines += [f"🍖 {escape(w['product'])}: <b>{reports.kgf(w['kg'])} kg</b> (limit {reports.kgf(w['limit'])} kg)",
+                  (f"Limitdan oshdi: +{reports.kgf(w['over'])} kg × {som(w['kg_bonus'])} = <b>{som(w['bonus'])}</b>"
+                   if w["over"] else f"Limitgacha yana {reports.kgf(w['limit'] - w['kg'])} kg"),
+                  f"Fiks oylik: {som(w['fixed'])}",
+                  f"Hisoblandi: <b>{som(w['earned'])}</b>",
+                  f"Oldingiz: {som(w['paid'])}",
+                  f"Qoldi: <b>{som(w['left'])}</b>" if w["left"] >= 0 else f"Ortiqcha olgansiz: {som(-w['left'])}"]
+    elif w and w["rate"]:
         lines += [f"Kunlik: {som(w['rate'])}",
                   f"Hisoblandi: {len(days)} × {som(w['rate'])} = <b>{som(w['earned'])}</b>",
                   f"Oldingiz: {som(w['paid'])}",
@@ -970,17 +1001,50 @@ async def worker_text(update, ctx, u, text: str):
     emp = db.get_employee(u["employee_id"]) if u["employee_id"] else None
     if not emp or not emp["active"]:
         return await update.message.reply_text("Siz ishchilar ro'yxatida yo'qsiz. Xo'jayinga murojaat qiling.")
-    today = business_today()
+    today, kb = business_today(), worker_kb(u)
+    if text in (W_IN, W_OFF, W_ME):
+        ctx.user_data.pop("kg", None)
     if text in (W_IN, W_OFF):
         worked = text == W_IN
         db.mark_day(today, emp["id"], worked, u["tg_id"])
         n = len(db.worked_days(emp["id"], *month_period(today)))
         msg = "✅ Belgilandi: bugun ishga chiqdingiz." if worked else "🏖 Belgilandi: bugun dam olasiz."
-        return await update.message.reply_text(f"{msg} ({today:%d.%m})\nBu oy ishlagan kunlar: {n}",
-                                               reply_markup=WORKER_KB)
+        return await update.message.reply_text(f"{msg} ({today:%d.%m})\nBu oy ishlagan kunlar: {n}", reply_markup=kb)
     if text == W_ME:
-        return await update.message.reply_text(worker_summary(emp, today), parse_mode=HTML, reply_markup=WORKER_KB)
-    await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=WORKER_KB)
+        return await update.message.reply_text(worker_summary(emp, today), parse_mode=HTML, reply_markup=kb)
+    if emp["pay_type"] == "chef" and text == W_KG:
+        ctx.user_data["kg"] = True
+        old = db.kg_of(today, emp["id"])
+        hint = f"\n(bugun oldin {reports.kgf(old)} kg yozilgan — yangisi almashtiradi)" if old is not None else ""
+        return await update.message.reply_text(
+            f"🍖 Bugun ({today:%d.%m}) necha kg {escape((emp['product'] or 'go`sht').lower())} pishirdingiz?\n"
+            f"Faqat raqam: masalan 45 yoki 45.5{hint}", reply_markup=kb)
+    if emp["pay_type"] == "chef" and ctx.user_data.get("kg"):
+        kg = parse_kg(text)
+        if kg is None:
+            return await update.message.reply_text("Faqat raqam yozing, masalan 45 yoki 45.5", reply_markup=kb)
+        ctx.user_data.pop("kg", None)
+        db.set_kg(today, emp["id"], kg, u["tg_id"])
+        return await update.message.reply_text(chef_kg_reply(emp, today, kg), parse_mode=HTML, reply_markup=kb)
+    await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=kb)
+
+
+def parse_kg(text: str):
+    m = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*(?:kg|кг|kilo)?\s*", text.lower())
+    if not m:
+        return None
+    kg = float(m[1].replace(",", "."))
+    return kg if 0 < kg <= 5000 else None
+
+
+def chef_kg_reply(emp, day: date, kg: float) -> str:
+    start, end = month_period(day)
+    total = db.kg_total(emp["id"], start, end)
+    lim = emp["kg_limit"]
+    tail = (f"Limitdan oshdi: <b>+{reports.kgf(total - lim)} kg</b> → bonus {som(int((total - lim) * emp['kg_bonus']))}"
+            if total > lim else f"Limitgacha yana {reports.kgf(lim - total)} kg")
+    return (f"✅ {day:%d.%m}: <b>{reports.kgf(kg)} kg</b> yozildi.\n"
+            f"Bu oy jami: <b>{reports.kgf(total)} / {reports.kgf(lim)} kg</b>\n{tail}")
 
 
 @owner_only
@@ -1006,9 +1070,101 @@ async def job_worker_reminder(ctx: ContextTypes.DEFAULT_TYPE):
         if not w or e["id"] in status:
             continue
         try:
-            await ctx.bot.send_message(w["tg_id"], "Bugun ishga chiqdingizmi? Tugmani bosing 👇", reply_markup=WORKER_KB)
+            await ctx.bot.send_message(w["tg_id"], "Bugun ishga chiqdingizmi? Tugmani bosing 👇",
+                                       reply_markup=CHEF_KB if e["pay_type"] == "chef" else WORKER_KB)
         except Exception:
             log.warning("worker %s reminder failed", w["tg_id"])
+
+
+# ---------- oshpazlar (xo'jayin) ----------
+
+CHEF_STEPS = {
+    "name": "👨‍🍳 Oshpazning ismi? (ro'yxatda bor bo'lsa, o'sha ishchi oshpazga aylanadi)",
+    "fixed": "💰 Fiks oylik (masalan 6000000):",
+    "limit": "⚖️ Oylik limit, kg (masalan 1200):",
+    "bonus": "➕ Limitdan oshgan har 1 kg uchun qo'shimcha (masalan 5000):",
+}
+
+
+@owner_only
+async def chef_cmd(update, ctx, u):
+    ctx.user_data["chef"] = dict(step="name")
+    await update.message.reply_text(CHEF_STEPS["name"] + "\nBekor qilish: /bekor")
+
+
+async def chef_text(update, ctx, u, st: dict, text: str):
+    msg = update.message
+    if st["step"] == "name":
+        st.update(name=" ".join(text.split())[:40], step="product")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🐄 Mol go'shti", callback_data="op:Mol go'shti"),
+                                    InlineKeyboardButton("🐔 Tovuq go'shti", callback_data="op:Tovuq go'shti")]])
+        return await msg.reply_text("🍖 Nimani pishiradi? Tugmani bosing yoki o'zingiz yozing:", reply_markup=kb)
+    if st["step"] == "product":
+        st.update(product=text.strip()[:40], step="fixed")
+        return await msg.reply_text(CHEF_STEPS["fixed"])
+    n = reports.parse_amount(text)
+    if n is None:
+        return await msg.reply_text("Faqat raqam yozing. Bekor qilish: /bekor")
+    nxt = {"fixed": "limit", "limit": "bonus", "bonus": None}[st["step"]]
+    st[st["step"]] = n
+    if nxt:
+        st["step"] = nxt
+        return await msg.reply_text(CHEF_STEPS[nxt])
+    ctx.user_data.pop("chef", None)
+    item = dict(type="chef", by=u["tg_id"], **{k: st[k] for k in ("name", "product", "fixed", "limit", "bonus")})
+    key = stash(ctx, item)
+    await msg.reply_text(chef_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+
+
+def chef_preview(item: dict) -> str:
+    ex_over = 100
+    return (f"👨‍🍳 <b>Oshpaz: {escape(item['name'])}</b> — {escape(item['product'])}\n"
+            f"Fiks oylik: <b>{som(item['fixed'])}</b>\n"
+            f"Oylik limit: <b>{item['limit']} kg</b>\n"
+            f"Limitdan oshgan har kg: <b>{som(item['bonus'])}</b>\n\n"
+            f"Masalan, oyda {item['limit'] + ex_over} kg pishirsa: {som(item['fixed'])} + "
+            f"{ex_over} × {som(item['bonus'])} = <b>{som(item['fixed'] + ex_over * item['bonus'])}</b>")
+
+
+def save_chef(u, item: dict) -> str:
+    emp = db.find_employee(item["name"])
+    eid = emp["id"] if emp else db.add_employee(item["name"], None, 0, business_today())
+    db.set_chef(eid, item["product"], item["fixed"], item["limit"], item["bonus"])
+    db.audit(u["tg_id"], "chef_set", f"{eid} {item}")
+    return (f"✅ Saqlandi (№{eid}). Endi oshpazni botga ulang: /ishchi_ulash — "
+            "u har kuni «🍖 Bugun necha kg» ni bosib yozadi.")
+
+
+@owner_only
+async def kg_cmd(update, ctx, u):
+    words = list(ctx.args)
+    day = business_today()
+    if words and words[-1].lower() in ("kecha", "кеча"):
+        day -= timedelta(days=1)
+        words = words[:-1]
+    kg = parse_kg(words[-1]) if len(words) >= 2 else None
+    emp = db.find_employee(" ".join(words[:-1])) if kg is not None else None
+    if not emp or emp["pay_type"] != "chef":
+        chefs = ", ".join(e["name"] for e in db.employees() if e["pay_type"] == "chef") or "yo'q"
+        return await update.message.reply_text(f"Format: /kg Ali 45   yoki   /kg Ali 45 kecha\nOshpazlar: {chefs}")
+    db.set_kg(day, emp["id"], kg, u["tg_id"])
+    db.audit(u["tg_id"], "kg_set", f"{emp['id']} {day} {kg}")
+    await update.message.reply_text(chef_kg_reply(emp, day, kg), parse_mode=HTML)
+
+
+async def job_chef_reminder(ctx: ContextTypes.DEFAULT_TYPE):
+    today = business_today()
+    for e in db.employees():
+        w = db.worker_user_of(e["id"])
+        if e["pay_type"] != "chef" or not w or db.kg_of(today, e["id"]) is not None:
+            continue
+        if db.day_status(today).get(e["id"]) == 0:  # dam olgan
+            continue
+        try:
+            await ctx.bot.send_message(w["tg_id"], "🍖 Bugun necha kg pishirdingiz? «🍖 Bugun necha kg» ni bosing.",
+                                       reply_markup=CHEF_KB)
+        except Exception:
+            log.warning("chef %s reminder failed", w["tg_id"])
 
 
 # ---------- qarzlar (xo'jayin) ----------
@@ -1323,7 +1479,7 @@ async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not u:
         return await deny(update)
     if u["role"] == "worker":
-        return await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=WORKER_KB)
+        return await update.message.reply_text("Pastdagi tugmalardan birini bosing.", reply_markup=worker_kb(u))
     if u["role"] == "admin":
         st = ctx.user_data.get("close")
         if st:
@@ -1362,6 +1518,9 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if text in (O_TODAY, O_WEEK, O_MONTH, O_XLSX, O_STAFF, O_ADMIN, O_DEBT, B_EXP, B_INC):
         ctx.user_data.pop("salary_for", None)
         ctx.user_data.pop("debt", None)
+        ctx.user_data.pop("chef", None)
+    if u["role"] == "owner" and ctx.user_data.get("chef"):
+        return await chef_text(update, ctx, u, ctx.user_data["chef"], text)
     if u["role"] == "owner" and ctx.user_data.get("debt"):
         return await debt_text(update, ctx, u, ctx.user_data["debt"], text)
     if u["role"] in MANAGERS and ctx.user_data.get("salary_for"):
@@ -1427,6 +1586,8 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             text = sale_preview(item)
             await save_sale(ctx, item)
             await q.edit_message_text(text.split("\n\n⚠️")[0] + "\n\n✅ Saqlandi", parse_mode=HTML)
+        elif item["type"] == "chef":
+            await q.edit_message_text(chef_preview(item) + "\n\n" + save_chef(u, item), parse_mode=HTML)
         elif item["type"] in ("debt", "debtpay"):
             result = await save_debt(u, item)
             await q.edit_message_text(debt_preview(item).split("\n\nQarz:")[0] + "\n\n" + result, parse_mode=HTML)
@@ -1523,6 +1684,15 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"🧹 O'chirildi: {n['expenses']} ta xarajat, {n['sales']} ta kirim, {n['yandex']} ta Yandex, "
             f"{n['closings']} ta kunlik hisobot.\n"
             "Tochkalar, ishchilar va foydalanuvchilar joyida qoldi.")
+
+    if action == "op":  # op:<mahsulot> — oshpaz nimani pishiradi
+        st = ctx.user_data.get("chef")
+        await q.answer()
+        await q.edit_message_reply_markup(None)
+        if not st or st.get("step") != "product":
+            return await q.message.reply_text("Bu xabar eskirgan. /oshpaz ni qayta bosing.")
+        st.update(product=q.data.split(":", 1)[1], step="fixed")
+        return await q.message.reply_text(f"🍖 {escape(st['product'])}\n\n" + CHEF_STEPS["fixed"])
 
     if action == "wl":  # ishchini botga ulash — ro'yxat
         await q.answer()
@@ -1705,6 +1875,7 @@ def main():
                      ("kunlik", closings_cmd), ("kunlik_ochir", closing_delete_cmd),
                      ("qarzlar", debts_cmd), ("qarz_ochir", debt_delete_cmd),
                      ("davomat", attendance_cmd), ("ishchi_ulash", worker_link_cmd),
+                     ("oshpaz", chef_cmd), ("kg", kg_cmd),
                      ("foydalanuvchilar", users_cmd), ("ishchilar", staff_cmd),
                      ("ishchi_qosh", add_employee_cmd), ("oylik", salary_cmd), ("boshat", fire_cmd),
                      ("yandex", yandex_cmd), ("savdo", owner_sale_cmd), ("oxirgi", last_cmd),
@@ -1719,6 +1890,7 @@ def main():
     jq.run_daily(job_sales_reminder, at(SALES_REMINDER_TIME), name="sales_reminder")
     jq.run_daily(job_admin_reminder, at(ADMIN_REMINDER_TIME), name="admin_reminder")
     jq.run_daily(job_worker_reminder, at(ADMIN_REMINDER_TIME), name="worker_reminder")
+    jq.run_daily(job_chef_reminder, at(CHEF_REMINDER_TIME), name="chef_reminder")
     jq.run_daily(job_digest, at(DIGEST_TIME), name="digest")
     # PTB da 0 = yakshanba, bizning sozlamada 0 = dushanba
     jq.run_daily(job_backup, at(BACKUP_TIME), days=((BACKUP_WEEKDAY + 1) % 7,), name="backup")

@@ -265,21 +265,50 @@ def employee_payments(start: date, end: date, point_id=None) -> list[dict]:
             continue
         paid = paid_by_id.pop(e["id"], 0) + paid_by_name.pop(e["name"].lower(), 0)
         n, rate = days.get(e["id"], 0), e["daily_rate"]
-        out.append(dict(id=e["id"], name=e["name"], point=db.point_name(e["point_id"]), rate=rate, days=n,
-                        earned=n * rate, paid=paid, left=n * rate - paid, active=bool(e["active"])))
+        row = dict(id=e["id"], name=e["name"], point=db.point_name(e["point_id"]), type=e["pay_type"], rate=rate,
+                   days=n, earned=n * rate, paid=paid, active=bool(e["active"]))
+        if e["pay_type"] == "chef":
+            row.update(chef_pay(e, s0, end))
+            row["rate"] = row["fixed"]  # "stavka bor" degan belgi sifatida
+        row["left"] = row["earned"] - paid
+        out.append(row)
     for name, paid in paid_by_name.items():  # ro'yxatda yo'q ismlar
-        out.append(dict(id=None, name=name.title(), point="?", rate=0, days=0, earned=0, paid=paid, left=-paid,
-                        active=True))
+        out.append(dict(id=None, name=name.title(), point="?", type="daily", rate=0, days=0, earned=0, paid=paid,
+                        left=-paid, active=True))
     return out
+
+
+def chef_pay(e, start: date, end: date) -> dict:
+    """Oshpaz: fiks oylik (oy o'rtasidan boshlagan bo'lsa — qismi) + limitdan oshgan har kg uchun bonus."""
+    m_start, m_end = month_range(start.year, start.month)
+    hired = date.fromisoformat(e["hired_on"]) if e["hired_on"] else m_start
+    work_from = max(m_start, SALARY_START, hired)
+    frac = max(0, (m_end - work_from).days + 1) / ((m_end - m_start).days + 1)
+    fixed = int(round(e["monthly_fixed"] * frac, -3))
+    kg = db.kg_total(e["id"], start, end)
+    over = max(0.0, kg - e["kg_limit"])
+    bonus = int(round(over * e["kg_bonus"]))
+    return dict(product=e["product"] or "", fixed=fixed, full_fixed=e["monthly_fixed"], kg=kg,
+                limit=e["kg_limit"], over=over, kg_bonus=e["kg_bonus"], bonus=bonus, earned=fixed + bonus)
+
+
+def kgf(x: float) -> str:
+    return f"{x:,.1f}".replace(",", " ").replace(".0", "")
 
 
 def wage_lines(r) -> list[str]:
     """Bitta ishchi uchun qisqa satrlar (hisobot <pre> bloki uchun)."""
     out = []
-    if r["rate"]:
-        out.append(f"  {r['days']} kun × {k(r['rate'])} = {k(r['earned'])}")
+    if r.get("type") == "chef":
+        out.append(f"  {kgf(r['kg'])}/{kgf(r['limit'])} kg, +{kgf(r['over'])} kg")
+        out.append(f"  fiks {k(r['fixed'])} + bonus {k(r['bonus']) if r['bonus'] else '0'}")
         out.append(f"  oldi {k(r['paid']) if r['paid'] else '0'}, " + (f"qoldi {k(r['left'])}" if r["left"] >= 0
-                                                  else f"ortiqcha {k(-r['left'])}"))
+                                                                     else f"ortiqcha {k(-r['left'])}"))
+        return out
+    if r["rate"]:
+        out.append(f"  {r['days']} kun × {k(r['rate'])} = {k(r['earned']) if r['earned'] else '0'}")
+        out.append(f"  oldi {k(r['paid']) if r['paid'] else '0'}, "
+                   + (f"qoldi {k(r['left']) if r['left'] else '0'}" if r["left"] >= 0 else f"ortiqcha {k(-r['left'])}"))
     else:
         out.append(f"  stavka yo'q, {r['days']} kun, oldi {k(r['paid']) if r['paid'] else '0'}")
     return out
@@ -305,6 +334,9 @@ def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
     out = [f"📊 <b>{escape(title)}</b> — {escape(scope)}"]
     if not (d.sales or d.expenses or d.yandex):
         out.append("Ma'lumot yo'q.")
+        sb = salary_block(start, end, point_id) if kind == "oy" else None
+        if sb:
+            out.append(sb)
         return out
     out.append(pnl_block(d))
     if kind in ("bugun", "kecha"):
@@ -384,8 +416,12 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
         if key == "ishchilar":  # ishchilar summasini ism bo'yicha ochib ko'rsatamiz
             for nm, paid in sorted(paid_raw.items(), key=lambda x: -x[1]):
                 w = wages.get(nm.lower())
-                note = (f"{w['days']} kun × {som(w['rate'])} = {som(w['earned'])}, qoldi {som(w['left'])}"
-                        if w and w["rate"] else "")
+                if w and w["type"] == "chef":
+                    note = (f"fiks {som(w['fixed'])} + bonus {som(w['bonus'])} ({kgf(w['kg'])} kg), "
+                            f"qoldi {som(w['left'])}")
+                else:
+                    note = (f"{w['days']} kun × {som(w['rate'])} = {som(w['earned'])}, qoldi {som(w['left'])}"
+                            if w and w["rate"] else "")
                 ws.append([f"   {nm}", paid, note])
     ws.append(["JAMI XARAJAT", d.spent])
     ws.append([])
@@ -468,10 +504,22 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
 
     # 7. Ishchilar
     ws6 = wb.create_sheet("Ishchilar")
-    ws6.append(["Ishchi", "Tochka", "Kunlik stavka", "Ishlagan kun", "Hisoblangan", "Oldi", "Qoldi", "Holati"])
+    ws6.append(["Ishchi", "Turi", "Kunlik stavka", "Ishlagan kun", "Fiks oylik", "Pishirgan kg", "Limit kg",
+                "Limitdan oshgan kg", "Bonus", "Hisoblangan", "Oldi", "Qoldi", "Holati"])
     for r in employee_payments(start, end, point_id):
-        ws6.append([r["name"], r["point"], r["rate"], r["days"], r["earned"], r["paid"], r["left"],
-                    "ishlaydi" if r["active"] else "bo'shagan"])
+        if r["type"] == "chef":
+            ws6.append([r["name"], f"Oshpaz ({r['product']})", None, r["days"], r["fixed"], r["kg"], r["limit"],
+                        r["over"], r["bonus"], r["earned"], r["paid"], r["left"],
+                        "ishlaydi" if r["active"] else "bo'shagan"])
+        else:
+            ws6.append([r["name"], "Kunlik", r["rate"], r["days"], None, None, None, None, None, r["earned"],
+                        r["paid"], r["left"], "ishlaydi" if r["active"] else "bo'shagan"])
+    kg_list = db.kg_rows(max(start, SALARY_START), end) if not point_id else []
+    if kg_list:
+        ws9 = wb.create_sheet("Oshpazlar")
+        ws9.append(["Sana", "Oshpaz", "Mahsulot", "Kg"])
+        for r in kg_list:
+            ws9.append([r["day"], r["name"], r["product"], r["kg"]])
     if start < SALARY_START <= end:
         ws6.append([])
         ws6.append([f"Ish haqi hisobi {SALARY_START:%d.%m.%Y} dan boshlangan"])
