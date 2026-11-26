@@ -415,7 +415,9 @@ async def staff_cmd(update, ctx, u):
         if w.get("type") == "chef":
             line += (f"   👨‍🍳 {escape(w['product'])}: {reports.kgf(w['kg'])} / {reports.kgf(w['limit'])} kg"
                      + (f", limitdan +{reports.kgf(w['over'])} kg" if w["over"] else "") + "\n"
-                     f"   fiks {som(w['fixed'])} + bonus {som(w['bonus'])} = {som(w['earned'])}\n"
+                     + (f"   oylik {som(w['full_fixed'])}, bu oy {w['fixed_part']} → {som(w['fixed'])}\n"
+                        if w["fixed_part"] else "")
+                     + f"   fiks {som(w['fixed'])} + bonus {som(w['bonus'])} = {som(w['earned'])}\n"
                      f"   oldi {som(w['paid'])} · {rest}")
             total_left += max(w["left"], 0)
         elif w["rate"]:
@@ -988,7 +990,8 @@ def worker_summary(emp, today: date) -> str:
         lines += [f"🍖 {escape(w['product'])}: <b>{reports.kgf(w['kg'])} kg</b> (limit {reports.kgf(w['limit'])} kg)",
                   (f"Limitdan oshdi: +{reports.kgf(w['over'])} kg × {som(w['kg_bonus'])} = <b>{som(w['bonus'])}</b>"
                    if w["over"] else f"Limitgacha yana {reports.kgf(w['limit'] - w['kg'])} kg"),
-                  f"Fiks oylik: {som(w['fixed'])}",
+                  (f"Fiks oylik: {som(w['full_fixed'])} (bu oy {w['fixed_part']} → {som(w['fixed'])})"
+                   if w["fixed_part"] else f"Fiks oylik: {som(w['fixed'])}"),
                   f"Hisoblandi: <b>{som(w['earned'])}</b>",
                   f"Oldingiz: {som(w['paid'])}",
                   f"Qoldi: <b>{som(w['left'])}</b>" if w["left"] >= 0 else f"Ortiqcha olgansiz: {som(-w['left'])}"]

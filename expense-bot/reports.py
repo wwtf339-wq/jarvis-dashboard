@@ -288,7 +288,11 @@ def chef_pay(e, start: date, end: date) -> dict:
     kg = db.kg_total(e["id"], start, end)
     over = max(0.0, kg - e["kg_limit"])
     bonus = int(round(over * e["kg_bonus"]))
-    return dict(product=e["product"] or "", fixed=fixed, full_fixed=e["monthly_fixed"], kg=kg,
+    part = ""
+    if fixed != e["monthly_fixed"]:
+        days_in, days_all = max(0, (m_end - work_from).days + 1), (m_end - m_start).days + 1
+        part = f"{work_from:%d.%m}–{m_end:%d.%m}: {days_in}/{days_all} kun"
+    return dict(product=e["product"] or "", fixed=fixed, full_fixed=e["monthly_fixed"], fixed_part=part, kg=kg,
                 limit=e["kg_limit"], over=over, kg_bonus=e["kg_bonus"], bonus=bonus, earned=fixed + bonus)
 
 
