@@ -174,6 +174,7 @@ def init():
         _add_col(c, "employees", "kg_bonus", "INTEGER NOT NULL DEFAULT 0")
         _add_col(c, "production", "stock_kg", "REAL")   # ertalab skladdagi xom go'sht
         _add_col(c, "expenses", "pay_method", "TEXT")    # cash (naqd) | card (schet/karta)
+        _add_col(c, "debt_moves", "pay_method", "TEXT")  # qarz to'lovi: naqd | schet
         _add_col(c, "production", "ready_kg", "REAL")   # kechqurun: tayyor mahsulot chiqdi
         if c.execute("PRAGMA user_version").fetchone()[0] < 2:
             # bir martalik: eski oylik/stavkalar o'chiriladi (xo'jayin kunlik summani qayta yozadi),
@@ -669,10 +670,10 @@ def get_creditor(cid: int):
         return c.execute("SELECT * FROM creditors WHERE id=?", (cid,)).fetchone()
 
 
-def add_debt_move(cid: int, day: date, amount: int, note, by: int) -> int:
+def add_debt_move(cid: int, day: date, amount: int, note, by: int, pay_method=None) -> int:
     with conn() as c:
-        return c.execute("INSERT INTO debt_moves(creditor_id, day, amount, note, created_by) VALUES (?,?,?,?,?)",
-                         (cid, day.isoformat(), amount, note, by)).lastrowid
+        return c.execute("INSERT INTO debt_moves(creditor_id, day, amount, note, created_by, pay_method)"
+                         " VALUES (?,?,?,?,?,?)", (cid, day.isoformat(), amount, note, by, pay_method)).lastrowid
 
 
 def debt_balances(only_open: bool = True) -> list[sqlite3.Row]:

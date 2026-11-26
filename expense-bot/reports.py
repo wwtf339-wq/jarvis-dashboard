@@ -540,10 +540,11 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
         ws8.append(["JAMI QARZ", None, None, sum(r["balance"] for r in db.debt_balances() if r["balance"] > 0), None])
         ws8.append([])
         ws8.append(["Shu oydagi harakatlar"])
-        ws8.append(["Sana", "Kimga", "Qarz olindi", "To'landi", "Izoh"])
+        ws8.append(["Sana", "Kimga", "Qarz olindi", "To'landi", "To'lov turi", "Izoh"])
         for m in db.debt_moves_between(start, end):
             ws8.append([m["day"], m["name"], m["amount"] if m["amount"] > 0 else None,
-                        -m["amount"] if m["amount"] < 0 else None, m["note"]])
+                        -m["amount"] if m["amount"] < 0 else None,
+                        PAY_NAMES.get(m["pay_method"], "") if m["amount"] < 0 else "", m["note"]])
 
     # 7. Ishchilar
     ws6 = wb.create_sheet("Ishchilar")

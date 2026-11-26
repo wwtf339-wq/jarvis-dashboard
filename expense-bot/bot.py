@@ -1363,7 +1363,8 @@ def debt_preview(item: dict) -> str:
                 f"Qarz: {som(old)} → <b>{som(old + item['amount'])}</b>")
     cr = db.get_creditor(item["cid"])
     old = db.debt_balance(item["cid"])
-    return (f"💵 <b>Qarz to'lash</b>\n\n👤 {escape(cr['name'])}\n💰 <b>{som(item['amount'])}</b>\n\n"
+    pay = f"\n{PAY_LABEL[item['pay']]}" if item.get("pay") else ""
+    return (f"💵 <b>Qarz to'lash</b>\n\n👤 {escape(cr['name'])}\n💰 <b>{som(item['amount'])}</b>{pay}\n\n"
             f"Qarz: {som(old)} → <b>{som(old - item['amount'])}</b>")
 
 
@@ -1374,7 +1375,8 @@ async def debt_pay_preview(message, ctx, u, cid: int, amount: int):
                                          "To'g'ri summani yozing: «💵 Qarz to'lash».")
     item = dict(type="debtpay", cid=cid, amount=amount, day=business_today().isoformat(), by=u["tg_id"])
     key = stash(ctx, item)
-    await message.reply_text(debt_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+    await message.reply_text(debt_preview(item) + "\n\n💳 <b>Qanday to'landi?</b>", parse_mode=HTML,
+                             reply_markup=pay_kb(key))
 
 
 async def save_debt(u, item: dict) -> str:
@@ -1384,7 +1386,7 @@ async def save_debt(u, item: dict) -> str:
         mid = db.add_debt_move(cid, day, item["amount"], item.get("note"), u["tg_id"])
     else:
         cid = item["cid"]
-        mid = db.add_debt_move(cid, day, -item["amount"], "to'lov", u["tg_id"])
+        mid = db.add_debt_move(cid, day, -item["amount"], "to'lov", u["tg_id"], item.get("pay"))
     db.audit(u["tg_id"], item["type"], f"{mid} {cid} {item['amount']}")
     return f"✅ Saqlandi (№{mid}). {db.get_creditor(cid)['name']} — qolgan qarz: <b>{som(db.debt_balance(cid))}</b>"
 
@@ -1720,6 +1722,9 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         elif item["type"] == "chef":
             await q.edit_message_text(chef_preview(item) + "\n\n" + save_chef(u, item), parse_mode=HTML)
         elif item["type"] in ("debt", "debtpay"):
+            if item["type"] == "debtpay" and not item.get("pay"):
+                pending[parts[1]] = item
+                return await q.answer("Avval to'lov turini tanlang: naqd yoki schet", show_alert=True)
             result = await save_debt(u, item)
             await q.edit_message_text(debt_preview(item).split("\n\nQarz:")[0] + "\n\n" + result, parse_mode=HTML)
         elif item["type"] == "close":
@@ -1734,7 +1739,8 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await q.edit_message_reply_markup(None)
         item["pay"] = parts[2]
         await q.answer(PAY_LABEL[parts[2]])
-        return await q.edit_message_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
+        preview = debt_preview(item) if item["type"] == "debtpay" else exp_preview(item)
+        return await q.edit_message_text(preview, parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
 
     if action == "pt":  # pt:<key>:<point_id>
         item = pending.get(parts[1])
@@ -1894,7 +1900,8 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         rows = db.debt_history(cid)
         lines = [f"📜 <b>{escape(db.get_creditor(cid)['name'])}</b> — qarz {som(db.debt_balance(cid))}\n"]
         for r in rows:
-            sign = "➕ qarz" if r["amount"] > 0 else "💵 to'landi"
+            sign = "➕ qarz" if r["amount"] > 0 else (
+                "💵 to'landi" + {"cash": " (naqd)", "card": " (schet)"}.get(r["pay_method"], ""))
             note = f" — {escape(r['note'])}" if r["note"] and r["amount"] > 0 else ""
             lines.append(f"№{r['id']} {r['day'][8:]}.{r['day'][5:7]} {sign} {som(abs(r['amount']))}{note}")
         lines.append("\nXato yozuvni o'chirish: /qarz_ochir №")

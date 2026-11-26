@@ -226,7 +226,7 @@ Ishchilar (go'sht pishirish va boshqa ishlar) **tochkalarga bog'lanmaydi**. Hiso
 
 Bosh menyuda **📒 Qarzlar** tugmasi: go'shtchi, bozor, ta'minotchilarga qarzlarimiz.
 - **➕ Qarz yozish** — bitta xabar: `Go'shtchi Akmal 2500000 mol go'shti 20 kg` (kim — summa — izoh). Shu nom bilan yana yozilsa, summasi qo'shiladi.
-- **💵 Qarz to'lash** — kimga to'laganingizni tanlaysiz, summani yozasiz yoki «To'liq to'lash» ni bosasiz. Qarzdan ko'p yozib bo'lmaydi.
+- **💵 Qarz to'lash** — kimga to'laganingizni tanlaysiz, summani yozasiz yoki «To'liq to'lash» ni bosasiz, keyin **💵 Naqd** yoki **💳 Schet / karta** ni tanlaysiz (tanlanmaguncha saqlanmaydi). Qarzdan ko'p yozib bo'lmaydi. Tarix va Excel'da to'lov turi ko'rinadi.
 - **📜 Tarix** — har bir odam bo'yicha qarz va to'lovlar ro'yxati; xato yozuv `/qarz_ochir №` bilan o'chiriladi.
 - Excel'da **Qarzlar** varag'i: har kimga jami olingan, to'langan, qoldiq va shu oydagi harakatlar.
 - Qarzlar foyda/zarar hisobiga avtomatik qo'shilmaydi (ikki marta hisoblanmasligi uchun). `/tozalash` qarzlarga tegmaydi.
