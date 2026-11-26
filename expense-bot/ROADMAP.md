@@ -197,6 +197,10 @@ Vaqtlarni `.env` dagi `DIGEST_TIME`, `SALES_REMINDER_TIME`, `BACKUP_*` orqali o'
 
 ---
 
+### Xarajat: naqd yoki schet/karta
+
+Xarajat yozilgach, saqlashdan oldin bot so'raydi: **💵 Naqd** yoki **💳 Schet / karta**. Tanlanmaguncha «Saqlash» chiqmaydi. Hisobotda «Jami xarajat» ostida «shundan naqd / schet-karta», Excel'da **Xarajatlar** varag'ida «To'lov» ustuni va Xulosa'da bo'linma. Admin kunlik hisobotidagi xarajatlar kassadan to'langani uchun avtomatik «naqd».
+
 ## 5.0. Ishchilar: kunlik ish haqi va davomat
 
 Ishchilar (go'sht pishirish va boshqa ishlar) **tochkalarga bog'lanmaydi**. Hisob **26.11.2026** dan (`SALARY_START`).

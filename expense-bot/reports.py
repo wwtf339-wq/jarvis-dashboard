@@ -122,6 +122,17 @@ def collect(start: date, end: date, point_id=None) -> Data:
 
 # ---------- matn bloklari ----------
 
+PAY_NAMES = {"cash": "Naqd", "card": "Schet/karta"}
+
+
+def pay_split(rows) -> dict:
+    """Xarajatlar to'lov turi bo'yicha: naqd / schet-karta / ko'rsatilmagan (eski yozuvlar)."""
+    t = {"cash": 0, "card": 0, None: 0}
+    for r in rows:
+        t[r["pay_method"] if r["pay_method"] in ("cash", "card") else None] += r["amount"]
+    return t
+
+
 def pnl_block(d: Data) -> str:
     cats = d.by_cat()
     lines = ["TUSHUM",
@@ -130,7 +141,11 @@ def pnl_block(d: Data) -> str:
              "XARAJAT"]
     for key, name in CATEGORIES.items():
         lines.append(line(f"  {name}", cats.get(key, 0)))
-    lines += [line("  Jami xarajat", d.spent), "-" * W]
+    lines.append(line("  Jami xarajat", d.spent))
+    by_pay = pay_split(d.expenses)
+    if by_pay["card"] or by_pay["cash"]:
+        lines += [line("   shundan naqd", by_pay["cash"]), line("   schet/karta", by_pay["card"])]
+    lines.append("-" * W)
     profit = d.income - d.spent
     lines.append(line("FOYDA" if profit >= 0 else "ZARAR", profit))
     return pre(lines)
@@ -236,7 +251,7 @@ def detail_block(d: Data) -> str:
             label = f"{r['person']} ({r['item']})" if r["person"] else r["item"]
             if r["quantity"]:
                 label += f" {r['quantity']}"
-            lines.append(line(f"#{r['id']} {label}", r["amount"]))
+            lines.append(line(f"#{r['id']} {'💳' if r['pay_method'] == 'card' else ''}{label}", r["amount"]))
             who = names.get(r["created_by"])
             if who and who[1] in ("cashier", "admin"):
                 lines.append(f"   ✍ {who[0]}"[:W])
@@ -447,6 +462,11 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
                             if w and w["rate"] else "")
                 ws.append([f"   {nm}", paid, note])
     ws.append(["JAMI XARAJAT", d.spent])
+    ps = pay_split(d.expenses)
+    ws.append(["   shundan naqd", ps["cash"]])
+    ws.append(["   shundan schet/karta", ps["card"]])
+    if ps[None]:
+        ws.append(["   to'lov turi ko'rsatilmagan", ps[None]])
     ws.append([])
     ws.append(["FOYDA", d.income - d.spent])
     ws.append([])
@@ -489,10 +509,10 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
     # 4. Xarajatlar
     ws4 = wb.create_sheet("Xarajatlar")
     names = db.user_names()
-    ws4.append(["№", "Sana", "Tochka", "Kategoriya", "Nomi", "Miqdor", "Ishchi", "Summa", "Kim yozdi"])
+    ws4.append(["№", "Sana", "Tochka", "Kategoriya", "Nomi", "Miqdor", "Ishchi", "Summa", "To'lov", "Kim yozdi"])
     for r in d.expenses:
         ws4.append([r["id"], r["day"], pts.get(r["point_id"], "Umumiy"), CATEGORIES[r["category"]],
-                    r["item"], r["quantity"], r["person"], r["amount"],
+                    r["item"], r["quantity"], r["person"], r["amount"], PAY_NAMES.get(r["pay_method"], ""),
                     names.get(r["created_by"], ("?",))[0]])
 
     # 5. Yandex

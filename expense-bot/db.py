@@ -173,6 +173,7 @@ def init():
         _add_col(c, "employees", "kg_limit", "INTEGER NOT NULL DEFAULT 0")
         _add_col(c, "employees", "kg_bonus", "INTEGER NOT NULL DEFAULT 0")
         _add_col(c, "production", "stock_kg", "REAL")   # ertalab skladdagi xom go'sht
+        _add_col(c, "expenses", "pay_method", "TEXT")    # cash (naqd) | card (schet/karta)
         _add_col(c, "production", "ready_kg", "REAL")   # kechqurun: tayyor mahsulot chiqdi
         if c.execute("PRAGMA user_version").fetchone()[0] < 2:
             # bir martalik: eski oylik/stavkalar o'chiriladi (xo'jayin kunlik summani qayta yozadi),
@@ -455,15 +456,16 @@ def find_employee(name: str):
 
 # ---------- xarajatlar ----------
 
-def add_expenses(day: date, point_id, entries: list[dict], by: int) -> list[int]:
+def add_expenses(day: date, point_id, entries: list[dict], by: int, pay_method=None) -> list[int]:
+    """pay_method: 'cash' (naqd) yoki 'card' (schet/karta)."""
     ids = []
     with conn() as c:
         for e in entries:
             ids.append(c.execute(
                 "INSERT INTO expenses(day, point_id, category, item, quantity, amount, person,"
-                " employee_id, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                " employee_id, created_by, pay_method) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (day.isoformat(), point_id, e["category"], e["item"], e.get("quantity"),
-                 int(e["amount"]), e.get("person"), e.get("employee_id"), by),
+                 int(e["amount"]), e.get("person"), e.get("employee_id"), by, pay_method),
             ).lastrowid)
     return ids
 
@@ -516,7 +518,7 @@ def save_closing(day: date, point_id: int, total: int, card: int, cash_left: int
         for e in entries:
             ids.append(c.execute(
                 "INSERT INTO expenses(day, point_id, category, item, quantity, amount, person,"
-                " employee_id, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+                " employee_id, created_by, pay_method) VALUES (?,?,?,?,?,?,?,?,?,'cash')",
                 (iso, point_id, e["category"], e["item"], e.get("quantity"), int(e["amount"]),
                  e.get("person"), e.get("employee_id"), by)).lastrowid)
         c.execute("DELETE FROM sales WHERE day=? AND point_id=?", (iso, point_id))

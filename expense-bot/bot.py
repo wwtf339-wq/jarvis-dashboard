@@ -151,6 +151,26 @@ def confirm_kb(key: str) -> InlineKeyboardMarkup:
                                   InlineKeyboardButton("❌ Bekor", callback_data=f"no:{key}")]])
 
 
+PAY_LABEL = {"cash": "💵 Naqd", "card": "💳 Schet / karta"}
+
+
+def pay_kb(key: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("💵 Naqd", callback_data=f"pm:{key}:cash"),
+                                  InlineKeyboardButton("💳 Schet / karta", callback_data=f"pm:{key}:card")],
+                                 [InlineKeyboardButton("❌ Bekor", callback_data=f"no:{key}")]])
+
+
+def exp_kb(key: str, item: dict) -> InlineKeyboardMarkup:
+    """Xarajat bo'lsa — avval to'lov turi (naqd / schet), keyin Saqlash."""
+    if item.get("expenses") and not item.get("pay"):
+        return pay_kb(key)
+    return confirm_kb(key)
+
+
+def exp_ask(item: dict) -> str:
+    return "\n\n💳 <b>Qanday to'landi?</b>" if item.get("expenses") and not item.get("pay") else ""
+
+
 def points_kb(prefix: str, with_general: bool = False, with_all: bool = False) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(p["name"], callback_data=f"{prefix}:{p['id']}")] for p in db.points()]
     if with_general:
@@ -547,7 +567,8 @@ def exp_preview(item: dict) -> str:
         lines.append(f"📝 <i>{escape(item['transcript'])}</i>")
     day = date.fromisoformat(item["day"])
     pt = f"   🏪 {escape(db.point_name(item['point']))}" if "point" in item else ""
-    lines.append(f"📅 {day:%d.%m.%Y}{pt}")
+    pay = f"   {PAY_LABEL[item['pay']]}" if item.get("pay") else ""
+    lines.append(f"📅 {day:%d.%m.%Y}{pt}{pay}")
     lines.append("")
     total = 0
     for e in item["expenses"]:
@@ -570,7 +591,8 @@ async def ask_point_or_confirm(message, ctx, item: dict, point_hint=None):
     if pid or len(pts) <= 1:
         item["point"] = pid or (pts[0]["id"] if pts else None)
         key = stash(ctx, item)
-        return await message.reply_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+        return await message.reply_text(exp_preview(item) + exp_ask(item), parse_mode=HTML,
+                                        reply_markup=exp_kb(key, item))
     key = stash(ctx, item)
     await message.reply_text(exp_preview(item) + "\n\n🏪 Qaysi tochka uchun?", parse_mode=HTML,
                              reply_markup=points_kb(f"pt:{key}", with_general=True))
@@ -601,7 +623,8 @@ async def handle_parsed(message, ctx, u, parsed: ai.Parsed):
     if u["role"] in ("cashier", "admin"):
         item["point"] = u["point_id"]
         key = stash(ctx, item)
-        return await message.reply_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(key))
+        return await message.reply_text(exp_preview(item) + exp_ask(item), parse_mode=HTML,
+                                        reply_markup=exp_kb(key, item))
     await ask_point_or_confirm(message, ctx, item, parsed.point)
 
 
@@ -1669,7 +1692,11 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return await q.edit_message_text("❌ Bekor qilindi")
         if item["type"] == "exp":
             day = date.fromisoformat(item["day"])
-            ids = db.add_expenses(day, item["point"], item["expenses"], u["tg_id"]) if item["expenses"] else []
+            if item["expenses"] and not item.get("pay"):
+                pending[parts[1]] = item
+                return await q.answer("Avval to'lov turini tanlang: naqd yoki schet", show_alert=True)
+            ids = (db.add_expenses(day, item["point"], item["expenses"], u["tg_id"], item.get("pay"))
+                   if item["expenses"] else [])
             for y in item["yandex"]:
                 db.add_yandex(day, item["point"], y["amount"], y.get("note"), u["tg_id"])
             suffix = f"\n\n✅ Saqlandi" + (f" (№{ids[0]}–{ids[-1]})" if ids else "")
@@ -1700,6 +1727,15 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(close_preview(item) + "\n\n" + result, parse_mode=HTML)
         return await q.answer("Saqlandi")
 
+    if action == "pm":  # pm:<key>:cash|card — xarajat qanday to'landi
+        item = pending.get(parts[1])
+        if not item or item["by"] != u["tg_id"]:
+            await q.answer("Bu xabar eskirgan", show_alert=True)
+            return await q.edit_message_reply_markup(None)
+        item["pay"] = parts[2]
+        await q.answer(PAY_LABEL[parts[2]])
+        return await q.edit_message_text(exp_preview(item), parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
+
     if action == "pt":  # pt:<key>:<point_id>
         item = pending.get(parts[1])
         if not item or item["by"] != u["tg_id"]:
@@ -1711,8 +1747,10 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             pending.pop(parts[1], None)
             await q.edit_message_reply_markup(None)
             return await finish_employee(q.message, item)
-        preview = exp_preview(item) if item["type"] == "exp" else sale_preview(item)
-        return await q.edit_message_text(preview, parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
+        if item["type"] == "exp":
+            return await q.edit_message_text(exp_preview(item) + exp_ask(item), parse_mode=HTML,
+                                             reply_markup=exp_kb(parts[1], item))
+        return await q.edit_message_text(sale_preview(item), parse_mode=HTML, reply_markup=confirm_kb(parts[1]))
 
     if action == "at":  # at:<employee_id> / at:done — davomat belgilash
         return await attendance_button(q, ctx, u, parts[1])
