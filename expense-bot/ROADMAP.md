@@ -210,9 +210,12 @@ Ishchilar (go'sht pishirish va boshqa ishlar) **tochkalarga bog'lanmaydi**. Hiso
 ### Oshpazlar: fiks oylik + kg bonus
 
 - Qo'shish: `/oshpaz` → ism → nimani pishiradi (🐄 Mol / 🐔 Tovuq yoki o'zingiz yozasiz) → fiks oylik → oylik limit (kg) → limitdan oshgan har kg uchun summa. Ro'yxatda bor ishchi ismi yozilsa, o'sha ishchi oshpazga aylanadi.
-- Oshpazni botga ulang (`/ishchi_ulash`). Uning menyusida qo'shimcha **🍖 Bugun necha kg** tugmasi bor: har kuni pishirgan kg ni yozadi (qayta yozsa, o'sha kungisi almashadi). Soat 21:00 gacha yozmasa, eslatma boradi.
-- Xo'jayin yozishi yoki tuzatishi: `/kg Ali 45` (bugun), `/kg Ali 45 kecha`.
-- **Hisob:** fiks oylik + (oy davomida jami kg − limit) × bonus. Masalan 1 310 kg, limit 1 200, 5 000 so'mdan: 6 000 000 + 110 × 5 000 = 6 550 000. Oy o'rtasida qo'shilgan oshpazning fiks oyligi ishlagan kunlariga qarab bo'linadi.
+- Oshpazni botga ulang (`/ishchi_ulash`). Uning menyusi: «✅ Ishga chiqdim / 🏖 Dam oldim», «📦 Sklad / 🍖 Kechki hisobot», «📊 Mening hisobim».
+- **Ertalab:** «Ishga chiqdim» → bot so'raydi: skladda necha kg xom go'sht bor (masalan 100). Keyin ham «📦 Sklad» bilan yangilash mumkin.
+- **Kechqurun «🍖 Kechki hisobot»:** necha kg xom pishirdi (80) → necha kg tayyor chiqdi (50) → har bir tochkaga necha kg berdi (Yangiyo'l 25, Qushbegi 25). Bot tekshiradi: tayyor xomdan, berilgan tayyordan ko'p bo'lmasin. Natija: skladda qolgan xom, chiqish %, tayyor qoldiq. Saqlangach xo'jayinga xabar keladi; qayta yozilsa o'sha kungisi almashadi. 21:00 gacha yozilmasa, eslatma boradi.
+- Ertalabki xulosada «Oshxona» bloki, Excel'ning **Oshpazlar** varag'ida kunma-kun: sklad, pishirildi, tayyor, chiqish %, har tochkaga berilgan kg, qoldiq va oy jami.
+- Xo'jayin pishirilgan xom kg ni tuzatishi: `/kg Ali 80` (bugun), `/kg Ali 80 kecha`.
+- **Hisob:** fiks oylik + (oy davomida pishirilgan xom kg − limit) × bonus. Masalan 1 310 kg, limit 1 200, 5 000 so'mdan: 6 000 000 + 110 × 5 000 = 6 550 000. Oy o'rtasida qo'shilgan oshpazning fiks oyligi ishlagan kunlariga qarab bo'linadi.
 - «👥 Xodimlar», oy hisoboti, Excel'ning **Ishchilar** va **Oshpazlar** (kunma-kun kg) varaqlarida ko'rinadi.
 
 ## 5.1. Qarzlar (faqat xo'jayin)

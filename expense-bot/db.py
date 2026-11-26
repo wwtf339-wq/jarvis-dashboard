@@ -115,6 +115,14 @@ CREATE TABLE IF NOT EXISTS production (         -- oshpaz: kuniga necha kg pishi
     PRIMARY KEY (day, employee_id)
 );
 
+CREATE TABLE IF NOT EXISTS deliveries (         -- oshpaz tayyor go'shtni qaysi tochkaga necha kg berdi
+    day TEXT NOT NULL,
+    employee_id INTEGER NOT NULL REFERENCES employees(id),
+    point_id INTEGER NOT NULL REFERENCES points(id),
+    kg REAL NOT NULL,
+    PRIMARY KEY (day, employee_id, point_id)
+);
+
 CREATE TABLE IF NOT EXISTS yandex (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     day TEXT NOT NULL,                        -- hisobga tushgan kun
@@ -164,6 +172,8 @@ def init():
         _add_col(c, "employees", "monthly_fixed", "INTEGER NOT NULL DEFAULT 0")
         _add_col(c, "employees", "kg_limit", "INTEGER NOT NULL DEFAULT 0")
         _add_col(c, "employees", "kg_bonus", "INTEGER NOT NULL DEFAULT 0")
+        _add_col(c, "production", "stock_kg", "REAL")   # ertalab skladdagi xom go'sht
+        _add_col(c, "production", "ready_kg", "REAL")   # kechqurun: tayyor mahsulot chiqdi
         if c.execute("PRAGMA user_version").fetchone()[0] < 2:
             # bir martalik: eski oylik/stavkalar o'chiriladi (xo'jayin kunlik summani qayta yozadi),
             # ishchilar tochkalarga bog'lanmaydi
@@ -486,7 +496,7 @@ def wipe_records() -> dict:
     """Barcha xarajat, kirim, Yandex va kunlik hisobotlarni o'chiradi. Tochka, ishchi, foydalanuvchilar qoladi."""
     with conn() as c:
         return {t: c.execute(f"DELETE FROM {t}").rowcount
-                for t in ("expenses", "sales", "yandex", "closings", "attendance", "production")}
+                for t in ("expenses", "sales", "yandex", "closings", "attendance", "production", "deliveries")}
 
 
 # ---------- kunlik hisobot (admin) ----------
@@ -721,10 +731,45 @@ def set_kg(day: date, employee_id: int, kg: float, by: int):
 
 
 def kg_of(day: date, employee_id: int):
+    """Shu kuni pishirilgan xom kg (hali yozilmagan bo'lsa None)."""
     with conn() as c:
         r = c.execute("SELECT kg FROM production WHERE day=? AND employee_id=?",
                       (day.isoformat(), employee_id)).fetchone()
-    return r["kg"] if r else None
+    return r["kg"] if r and r["kg"] else None
+
+
+def production_of(day: date, employee_id: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM production WHERE day=? AND employee_id=?",
+                         (day.isoformat(), employee_id)).fetchone()
+
+
+def set_stock(day: date, employee_id: int, stock: float, by: int):
+    """Ertalab: skladda necha kg xom go'sht bor."""
+    with conn() as c:
+        c.execute("INSERT INTO production(day, employee_id, kg, marked_by, stock_kg) VALUES (?,?,0,?,?)"
+                  " ON CONFLICT(day, employee_id) DO UPDATE SET stock_kg=excluded.stock_kg",
+                  (day.isoformat(), employee_id, by, stock))
+
+
+def set_evening(day: date, employee_id: int, raw: float, ready: float, given: dict, by: int):
+    """Kechqurun: pishirildi (xom kg), tayyor chiqdi, tochkalarga berildi {point_id: kg}."""
+    iso = day.isoformat()
+    with conn() as c:
+        c.execute("INSERT INTO production(day, employee_id, kg, marked_by, ready_kg) VALUES (?,?,?,?,?)"
+                  " ON CONFLICT(day, employee_id) DO UPDATE SET kg=excluded.kg, ready_kg=excluded.ready_kg,"
+                  " marked_by=excluded.marked_by", (iso, employee_id, raw, by, ready))
+        c.execute("DELETE FROM deliveries WHERE day=? AND employee_id=?", (iso, employee_id))
+        for pid, kg in given.items():
+            if kg:
+                c.execute("INSERT INTO deliveries(day, employee_id, point_id, kg) VALUES (?,?,?,?)",
+                          (iso, employee_id, int(pid), kg))
+
+
+def deliveries_of(day: date, employee_id: int) -> dict[int, float]:
+    with conn() as c:
+        return {r["point_id"]: r["kg"] for r in c.execute(
+            "SELECT point_id, kg FROM deliveries WHERE day=? AND employee_id=?", (day.isoformat(), employee_id))}
 
 
 def kg_total(employee_id: int, start: date, end: date) -> float:
@@ -737,4 +782,10 @@ def kg_rows(start: date, end: date) -> list[sqlite3.Row]:
     with conn() as c:
         return c.execute("SELECT p.*, e.name, e.product FROM production p JOIN employees e ON e.id = p.employee_id"
                          " WHERE p.day BETWEEN ? AND ? ORDER BY p.day, e.name",
+                         (start.isoformat(), end.isoformat())).fetchall()
+
+
+def deliveries_between(start: date, end: date) -> list[sqlite3.Row]:
+    with conn() as c:
+        return c.execute("SELECT * FROM deliveries WHERE day BETWEEN ? AND ? ORDER BY day",
                          (start.isoformat(), end.isoformat())).fetchall()

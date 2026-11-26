@@ -354,6 +354,22 @@ def owner_report(kind: str, ref: date, point_id=None) -> list[str]:
     return out
 
 
+def kitchen_lines(day: date) -> list[str]:
+    """Oshpazlar: pishirildi → tayyor → tochkalarga berildi."""
+    names = {p["id"]: p["name"] for p in db.points(active_only=False)}
+    out = []
+    for r in db.kg_rows(day, day):
+        if not r["kg"]:
+            continue
+        out.append(f"{r['name']} ({r['product'] or ''})"[:W])
+        out.append(f"  pishirildi {kgf(r['kg'])} kg"[:W])
+        if r["ready_kg"] is not None:
+            out.append(f"  tayyor {kgf(r['ready_kg'])} kg ({r['ready_kg'] / r['kg'] * 100:.0f}%)"[:W])
+        for pid, kg in db.deliveries_of(day, r["employee_id"]).items():
+            out.append(f"  → {names.get(pid, '?')} {kgf(kg)} kg"[:W])
+    return out
+
+
 def digest(day: date) -> str:
     """Ertalabki xulosa: kechagi kun + oy boshidan buyon."""
     d = collect(day, day)
@@ -368,6 +384,9 @@ def digest(day: date) -> str:
         for c in d.closings:
             k += kassa_lines(c)
         lines += ["<b>Kassa</b>", pre(k)]
+    kitchen = kitchen_lines(day)
+    if kitchen:
+        lines += ["<b>Oshxona</b>", pre(kitchen)]
     lines += missing_sales(collect(ms, me))
     return "\n".join(lines)
 
@@ -517,9 +536,26 @@ def excel_report(start: date, end: date, path: str, point_id=None) -> str:
     kg_list = db.kg_rows(max(start, SALARY_START), end) if not point_id else []
     if kg_list:
         ws9 = wb.create_sheet("Oshpazlar")
-        ws9.append(["Sana", "Oshpaz", "Mahsulot", "Kg"])
+        all_pts = db.points(active_only=False)
+        dl = defaultdict(float)
+        for r in db.deliveries_between(max(start, SALARY_START), end):
+            dl[(r["day"], r["employee_id"], r["point_id"])] += r["kg"]
+        ws9.append(["Sana", "Oshpaz", "Mahsulot", "Skladda (ertalab)", "Pishirildi (xom)", "Tayyor chiqdi",
+                    "Chiqish %", *[p["name"] for p in all_pts], "Tayyor qoldiq"])
+        tot = defaultdict(float)
         for r in kg_list:
-            ws9.append([r["day"], r["name"], r["product"], r["kg"]])
+            given = [dl.get((r["day"], r["employee_id"], p["id"]), 0) for p in all_pts]
+            ready = r["ready_kg"]
+            pct = round(ready / r["kg"] * 100, 1) if ready and r["kg"] else None
+            ws9.append([r["day"], r["name"], r["product"], r["stock_kg"], r["kg"] or None, ready, pct, *given,
+                        (ready - sum(given)) if ready is not None else None])
+            tot["raw"] += r["kg"] or 0
+            tot["ready"] += ready or 0
+            for p, g in zip(all_pts, given):
+                tot[p["id"]] += g
+        ws9.append(["JAMI", None, None, None, tot["raw"], tot["ready"],
+                    round(tot["ready"] / tot["raw"] * 100, 1) if tot["raw"] else None,
+                    *[tot[p["id"]] for p in all_pts], None])
     if start < SALARY_START <= end:
         ws6.append([])
         ws6.append([f"Ish haqi hisobi {SALARY_START:%d.%m.%Y} dan boshlangan"])
